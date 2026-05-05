@@ -4,7 +4,10 @@
       "Bash(dir:*)",
       "Bash(npm install:*)",
       "Bash(curl:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nImplement Phase 1 & 2: Darts scoring app with bar mode and display mode\n\nFeatures:\n- Supabase integration with database schema\n- Bar Mode: Match setup page \\(create matches with player names\\)\n- Bar Mode: Live scoring with keypad \\(0-180, auto-subtract from 501\\)\n- Bust validation \\(negative scores or exactly 1\\)\n- Undo functionality for score corrections\n- Display Mode: Live scoreboard with real-time Supabase subscriptions\n- React Router for navigation between modes\n- Home page with mode selection\n\nTech stack:\n- Vite + React for frontend\n- Supabase for database and real-time updates\n- React Router for client-side routing\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(pkill:*)",
+      "Bash(npm run dev:*)"
     ]
   }
 }

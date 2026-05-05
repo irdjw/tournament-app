@@ -1,12 +1,16 @@
 # Darts Tournament App - Setup Guide
 
-## Phase 1 & 2 Complete! 🎯
+## Phase 1, 2, 3 & 4 Complete! 🎯
 
 ### What's Working
 - ✅ Supabase connection
-- ✅ Bar Mode: Match setup (create matches with 2 players)
+- ✅ Bar Mode: Match setup with legs selection (Best of 3, 5, 7, 9)
 - ✅ Bar Mode: Live scoring (keypad, 501 countdown, bust validation, undo)
+- ✅ Bar Mode: Multi-leg matches with automatic progression
 - ✅ Display Mode: Live scoreboard with real-time updates
+- ✅ Display Mode: Shows leg scores and match queue
+- ✅ Player Mode: Player stats and match history
+- ✅ Standings: League table with rankings
 
 ## Setup Instructions
 
@@ -15,6 +19,9 @@
 2. Open the SQL Editor
 3. Copy and paste the contents of `frontend/docs/Supabase/schema.sql`
 4. Run the SQL to create all tables
+5. **IMPORTANT**: Run the migration for legs tracking:
+   - Copy and paste `frontend/docs/Supabase/migration-legs.sql`
+   - Run it in SQL Editor
 
 ### 2. Verify Environment
 Check that `frontend/.env` has your Supabase credentials:
@@ -35,39 +42,84 @@ cd frontend
 npm run dev
 ```
 
+The app will be available at http://localhost:5175
+
 ## How to Use
 
 ### Bar Mode (Tablet/Phone)
-1. Go to http://localhost:5173
+1. Go to the home page
 2. Click "Bar Mode"
 3. Enter two player names
-4. Click "Start Match"
-5. Use the keypad to enter scores:
+4. **Select match format** (Best of 3, 5, 7, or 9)
+5. Click "Start Match"
+6. Use the keypad to enter scores:
    - Enter 3-digit score (0-180)
    - Click "Submit" to log the score
    - Scores auto-subtract from 501
    - Bust on negative or exactly 1
    - Click "Undo Last" to undo mistakes
-6. First player to reach exactly 0 wins!
+7. When a player reaches 0:
+   - They win that leg
+   - Leg counter updates
+   - Game resets to 501 for next leg
+8. First player to win required legs wins the match!
 
 ### Display Mode (TV Screen)
-1. Open a second browser window
-2. Go to http://localhost:5173/display/scoreboard
-3. Leave it open - it will show the current match live
-4. Updates automatically as scores are entered in Bar Mode
+1. Open a browser window
+2. Go to home page and click "Display Mode"
+3. Shows current match with:
+   - Live scores updating automatically
+   - Leg counts for each player
+   - Match format (Best of X)
+   - Current leg number
+   - Queue of upcoming matches
+4. Auto-updates when:
+   - Scores change
+   - Legs complete
+   - Matches finish
 
-## What's Next (Phase 3 & 4)
+### Player Stats
+1. Go to home page and click "Player Stats"
+2. Enter a player name and search
+3. View:
+   - Total matches, wins, losses
+   - Win rate
+   - Average 3-dart score
+   - Complete match history
+   - Individual match statistics
 
-### Phase 3: Enhanced Display
-- Queue of upcoming matches
-- League table display
-- Match statistics (averages, 180s)
+### Standings
+1. Go to home page and click "Standings"
+2. View league table with:
+   - Current rankings (sorted by points)
+   - Match record (W-L)
+   - Leg difference
+   - Win percentage
+   - Points (2 per win)
 
-### Phase 4: Player Mode
-- Player profiles
-- Match history
-- League standings
-- Personal statistics
+## Features
+
+### Match Formats
+- **Single Leg**: First to 1
+- **Best of 3**: First to 2 legs
+- **Best of 5**: First to 3 legs
+- **Best of 7**: First to 4 legs
+- **Best of 9**: First to 5 legs
+
+### Statistics Tracked
+- 3-dart average per match
+- Highest score per match
+- Total visits (turns)
+- Legs won/lost
+- Match wins/losses
+- Leg difference
+- Win percentage
+
+### Real-time Features
+- Live score updates on display
+- Automatic leg progression
+- Match queue display
+- Instant standings updates
 
 ## Tech Stack
 - Frontend: Vite + React
@@ -75,24 +127,49 @@ npm run dev
 - Real-time: Supabase Realtime subscriptions
 - Routing: React Router
 
-## Testing the App
+## Testing Scenarios
 
-### Test Scenario 1: Simple Match
-1. Start a match: "Alice" vs "Bob"
-2. Enter scores: 60, 45, 81, 100
-3. Check Display Mode updates live
-4. Test undo button
-5. Play until someone wins
+### Test 1: Best of 5 Match
+1. Create match: "Alice" vs "Bob", Best of 5
+2. Play first leg to completion
+3. Watch leg counter update
+4. Continue until someone wins 3 legs
+5. Check standings are updated
 
-### Test Scenario 2: Bust Detection
-1. Player has 150 remaining
-2. Enter score of 151 (bust - negative)
-3. Score should stay at 150
-4. Player has 2 remaining
-5. Enter any score (bust - can't leave exactly 1)
+### Test 2: Multiple Matches
+1. Create several matches with different players
+2. Complete some matches
+3. Go to Standings page
+4. Verify rankings are correct
 
-### Test Scenario 3: Real-time Sync
+### Test 3: Player Stats
+1. Complete multiple matches for one player
+2. Go to Player Stats
+3. Search for that player
+4. Verify win/loss record and statistics
+
+### Test 4: Real-time Display
 1. Open Bar Mode in one window
-2. Open Display Mode in another
-3. Enter scores in Bar Mode
-4. Watch Display Mode update automatically
+2. Open Display Mode in another window
+3. Score a multi-leg match
+4. Watch Display Mode update:
+   - Scores change live
+   - Leg counters update
+   - New leg starts automatically
+
+## Database Schema Updates
+
+The app now tracks:
+- `matches.legs_to_win`: Required legs to win match
+- `matches.current_leg`: Current leg number
+- `match_players.legs_won`: Legs won by each player
+- `match_events.leg_number`: Which leg the event belongs to
+
+## Future Enhancements
+- Tournament brackets
+- Pool (8-ball/9-ball) support
+- More detailed statistics (180s, checkouts, first 9 average)
+- Player profiles with photos
+- Venue management
+- Season management
+- Mobile PWA

@@ -71,20 +71,47 @@ export default function Home() {
             </div>
           </Link>
 
-          <div style={{
-            padding: '2rem',
-            backgroundColor: '#ccc',
-            color: '#666',
-            borderRadius: '8px',
-            textAlign: 'center',
-            fontSize: '1.5rem',
-            fontWeight: 'bold'
-          }}>
-            👤 Player Mode
+          <Link
+            to="/player"
+            style={{
+              padding: '2rem',
+              backgroundColor: '#FF9800',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              textAlign: 'center',
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              transition: 'transform 0.2s',
+              display: 'block'
+            }}
+          >
+            👤 Player Stats
             <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-              Coming soon
+              View match history
             </div>
-          </div>
+          </Link>
+
+          <Link
+            to="/standings"
+            style={{
+              padding: '2rem',
+              backgroundColor: '#9C27B0',
+              color: 'white',
+              textDecoration: 'none',
+              borderRadius: '8px',
+              textAlign: 'center',
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+              transition: 'transform 0.2s',
+              display: 'block'
+            }}
+          >
+            🏆 Standings
+            <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
+              League table
+            </div>
+          </Link>
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ export default function Scoring() {
   const [players, setPlayers] = useState([])
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [scores, setScores] = useState({})
+  const [currentLeg, setCurrentLeg] = useState(1)
   const [visitHistory, setVisitHistory] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,6 +33,7 @@ export default function Scoring() {
 
       if (matchError) throw matchError
       setMatch(matchData)
+      setCurrentLeg(matchData.current_leg || 1)
 
       // Load players
       const { data: playersData, error: playersError } = await supabase
@@ -42,22 +44,22 @@ export default function Scoring() {
       if (playersError) throw playersError
       setPlayers(playersData)
 
-      // Initialize scores
+      // Initialize scores for current leg
       const initialScores = {}
       playersData.forEach(p => {
         initialScores[p.user_id] = STARTING_SCORE
       })
-      setScores(initialScores)
 
-      // Load existing events
+      // Load existing events for current leg
       const { data: eventsData } = await supabase
         .from('match_events')
         .select('*')
         .eq('match_id', matchId)
+        .eq('leg_number', matchData.current_leg || 1)
         .order('created_at', { ascending: true })
 
       if (eventsData && eventsData.length > 0) {
-        // Rebuild state from events
+        // Rebuild state from events for current leg
         const history = []
         const currentScores = { ...initialScores }
 
@@ -69,6 +71,8 @@ export default function Scoring() {
         setVisitHistory(history)
         setScores(currentScores)
         setCurrentPlayerIndex(eventsData.length % playersData.length)
+      } else {
+        setScores(initialScores)
       }
 
       setLoading(false)
@@ -153,6 +157,7 @@ export default function Scoring() {
           visit_number: visitHistory.filter(e => e.user_id === currentPlayer.user_id).length + 1,
           score_value: scoreValue,
           remaining_score: currentScore,
+          leg_number: currentLeg,
           metadata: { bust: true }
         })
 
@@ -164,11 +169,11 @@ export default function Scoring() {
       return
     }
 
-    // Check for win
+    // Check for leg win
     if (newScore === 0) {
       try {
         // Log winning visit
-        const { data: eventData, error: eventError } = await supabase
+        await supabase
           .from('match_events')
           .insert({
             match_id: matchId,
@@ -177,24 +182,45 @@ export default function Scoring() {
             visit_number: visitHistory.filter(e => e.user_id === currentPlayer.user_id).length + 1,
             score_value: scoreValue,
             remaining_score: 0,
-            metadata: { checkout: true }
+            leg_number: currentLeg,
+            metadata: { checkout: true, leg_win: true }
           })
-          .select()
-          .single()
 
-        if (eventError) throw eventError
+        // Update player's legs won
+        const updatedLegsWon = currentPlayer.legs_won + 1
+        await supabase
+          .from('match_players')
+          .update({ legs_won: updatedLegsWon })
+          .eq('id', currentPlayer.id)
 
-        // Update match status
+        // Check if player won the match
+        const legsToWin = match.legs_to_win || 1
+        if (updatedLegsWon >= legsToWin) {
+          // Match complete!
+          await supabase
+            .from('matches')
+            .update({ status: 'complete', completed_at: new Date().toISOString() })
+            .eq('id', matchId)
+
+          alert(`${currentPlayer.users.name} wins the match ${updatedLegsWon}-${players.find(p => p.id !== currentPlayer.id).legs_won}!`)
+          navigate('/bar/match-setup')
+          return
+        }
+
+        // Start next leg
+        const nextLeg = currentLeg + 1
         await supabase
           .from('matches')
-          .update({ status: 'complete', completed_at: new Date().toISOString() })
+          .update({ current_leg: nextLeg })
           .eq('id', matchId)
 
-        alert(`${currentPlayer.users.name} wins!`)
-        navigate('/bar/match-setup')
+        alert(`${currentPlayer.users.name} wins leg ${currentLeg}! Starting leg ${nextLeg}...`)
+
+        // Reload for next leg
+        loadMatch()
         return
       } catch (err) {
-        console.error('Error completing match:', err)
+        console.error('Error completing leg:', err)
         setError(err.message)
         return
       }
@@ -210,7 +236,8 @@ export default function Scoring() {
           event_type: 'visit',
           visit_number: visitHistory.filter(e => e.user_id === currentPlayer.user_id).length + 1,
           score_value: scoreValue,
-          remaining_score: newScore
+          remaining_score: newScore,
+          leg_number: currentLeg
         })
         .select()
         .single()
@@ -241,12 +268,19 @@ export default function Scoring() {
   }
 
   const currentPlayer = players[currentPlayerIndex]
+  const legsToWin = match.legs_to_win || 1
+  const totalLegs = (legsToWin * 2) - 1
 
   return (
     <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Darts Scoring</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Darts Scoring</h1>
+        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#666' }}>
+          Best of {totalLegs} • Leg {currentLeg}
+        </div>
+      </div>
 
-      {/* Player Scores */}
+      {/* Player Scores with Leg Counts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
         {players.map((player, idx) => (
           <div
@@ -261,6 +295,9 @@ export default function Scoring() {
           >
             <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
               {player.users.name}
+            </div>
+            <div style={{ fontSize: '1rem', color: '#666', marginBottom: '0.5rem' }}>
+              Legs: {player.legs_won || 0}
             </div>
             <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#333' }}>
               {scores[player.user_id]}

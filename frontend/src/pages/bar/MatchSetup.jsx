@@ -7,6 +7,7 @@ export default function MatchSetup() {
   const [loading, setLoading] = useState(false)
   const [player1Name, setPlayer1Name] = useState('')
   const [player2Name, setPlayer2Name] = useState('')
+  const [legsToWin, setLegsToWin] = useState(3)
   const [error, setError] = useState('')
 
   const handleCreateMatch = async (e) => {
@@ -62,7 +63,9 @@ export default function MatchSetup() {
         .insert({
           sport_id: sport.id,
           match_type: 'casual',
-          status: 'in_progress'
+          status: 'in_progress',
+          legs_to_win: legsToWin,
+          current_leg: 1
         })
         .select()
         .single()
@@ -130,7 +133,7 @@ export default function MatchSetup() {
           />
         </div>
 
-        <div style={{ marginBottom: '2rem' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
             Player 2 Name:
           </label>
@@ -147,6 +150,30 @@ export default function MatchSetup() {
             }}
             placeholder="Enter player name"
           />
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            Match Format:
+          </label>
+          <select
+            value={legsToWin}
+            onChange={(e) => setLegsToWin(parseInt(e.target.value))}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              fontSize: '1.1rem',
+              border: '2px solid #ccc',
+              borderRadius: '4px',
+              backgroundColor: 'white'
+            }}
+          >
+            <option value={1}>Single Leg (First to 1)</option>
+            <option value={2}>Best of 3 (First to 2)</option>
+            <option value={3}>Best of 5 (First to 3)</option>
+            <option value={4}>Best of 7 (First to 4)</option>
+            <option value={5}>Best of 9 (First to 5)</option>
+          </select>
         </div>
 
         <button

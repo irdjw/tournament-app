@@ -7,10 +7,12 @@ export default function Scoreboard() {
   const [currentMatch, setCurrentMatch] = useState(null)
   const [players, setPlayers] = useState([])
   const [scores, setScores] = useState({})
+  const [upcomingMatches, setUpcomingMatches] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadCurrentMatch()
+    loadUpcomingMatches()
     subscribeToUpdates()
   }, [])
 
@@ -51,11 +53,13 @@ export default function Scoreboard() {
         initialScores[p.user_id] = STARTING_SCORE
       })
 
-      // Load events and calculate current scores
+      // Load events for current leg only
+      const currentLeg = matchData.current_leg || 1
       const { data: eventsData } = await supabase
         .from('match_events')
         .select('*')
         .eq('match_id', matchData.id)
+        .eq('leg_number', currentLeg)
         .order('created_at', { ascending: true })
 
       if (eventsData && eventsData.length > 0) {
@@ -69,6 +73,27 @@ export default function Scoreboard() {
     } catch (err) {
       console.error('Error loading match:', err)
       setLoading(false)
+    }
+  }
+
+  const loadUpcomingMatches = async () => {
+    try {
+      const { data: pendingMatches, error } = await supabase
+        .from('matches')
+        .select(`
+          *,
+          match_players!inner(
+            users(name)
+          )
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(5)
+
+      if (error) throw error
+      setUpcomingMatches(pendingMatches || [])
+    } catch (err) {
+      console.error('Error loading upcoming matches:', err)
     }
   }
 
@@ -112,10 +137,29 @@ export default function Scoreboard() {
         },
         (payload) => {
           console.log('Match update:', payload)
-          if (payload.new.status === 'complete') {
-            // Match finished, reload to get next match
-            setTimeout(() => loadCurrentMatch(), 2000)
+          if (payload.new.status === 'complete' || payload.new.current_leg !== payload.old.current_leg) {
+            // Match finished or new leg started, reload
+            setTimeout(() => {
+              loadCurrentMatch()
+              loadUpcomingMatches()
+            }, 1000)
           }
+        }
+      )
+      .subscribe()
+
+    // Subscribe to match_players updates (for legs_won)
+    const playersChannel = supabase
+      .channel('players-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'match_players'
+        },
+        () => {
+          loadCurrentMatch()
         }
       )
       .subscribe()
@@ -123,6 +167,7 @@ export default function Scoreboard() {
     return () => {
       supabase.removeChannel(channel)
       supabase.removeChannel(matchChannel)
+      supabase.removeChannel(playersChannel)
     }
   }
 
@@ -133,7 +178,9 @@ export default function Scoreboard() {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        fontSize: '2rem'
+        fontSize: '2rem',
+        backgroundColor: '#1a1a1a',
+        color: 'white'
       }}>
         Loading...
       </div>
@@ -144,23 +191,48 @@ export default function Scoreboard() {
     return (
       <div style={{
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         height: '100vh',
-        fontSize: '2rem',
-        textAlign: 'center',
+        backgroundColor: '#1a1a1a',
+        color: 'white',
         padding: '2rem'
       }}>
-        <div>
+        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎯</div>
-          <div>No active match</div>
+          <div style={{ fontSize: '2rem' }}>No active match</div>
           <div style={{ fontSize: '1.25rem', marginTop: '1rem', color: '#666' }}>
             Start a match from Bar Mode
           </div>
         </div>
+
+        {upcomingMatches.length > 0 && (
+          <div style={{ maxWidth: '600px', width: '100%' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#4CAF50' }}>
+              Up Next
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {upcomingMatches.map(match => (
+                <div key={match.id} style={{
+                  padding: '1rem',
+                  backgroundColor: '#2a2a2a',
+                  borderRadius: '8px',
+                  border: '2px solid #444'
+                }}>
+                  {match.match_players.map(mp => mp.users.name).join(' vs ')}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
+
+  const legsToWin = currentMatch.legs_to_win || 1
+  const totalLegs = (legsToWin * 2) - 1
+  const currentLeg = currentMatch.current_leg || 1
 
   return (
     <div style={{
@@ -171,14 +243,14 @@ export default function Scoreboard() {
       backgroundColor: '#1a1a1a',
       color: 'white'
     }}>
-      <h1 style={{
-        fontSize: '3rem',
-        textAlign: 'center',
-        marginBottom: '3rem',
-        color: '#4CAF50'
-      }}>
-        🎯 LIVE DARTS
-      </h1>
+      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '3rem', marginBottom: '0.5rem', color: '#4CAF50' }}>
+          🎯 LIVE DARTS
+        </h1>
+        <div style={{ fontSize: '1.5rem', color: '#888' }}>
+          Best of {totalLegs} • Leg {currentLeg}
+        </div>
+      </div>
 
       <div style={{
         flex: 1,
@@ -187,17 +259,17 @@ export default function Scoreboard() {
         gap: '2rem',
         alignItems: 'center'
       }}>
-        {players.map((player, idx) => {
+        {players.map((player) => {
           const score = scores[player.user_id] || STARTING_SCORE
-          const isWinner = score === 0
+          const legsWon = player.legs_won || 0
 
           return (
             <div
               key={player.id}
               style={{
                 padding: '3rem',
-                backgroundColor: isWinner ? '#4CAF50' : '#2a2a2a',
-                border: `4px solid ${isWinner ? '#4CAF50' : '#444'}`,
+                backgroundColor: '#2a2a2a',
+                border: '4px solid #444',
                 borderRadius: '16px',
                 textAlign: 'center',
                 transition: 'all 0.3s ease'
@@ -206,40 +278,60 @@ export default function Scoreboard() {
               <div style={{
                 fontSize: '2.5rem',
                 fontWeight: 'bold',
-                marginBottom: '2rem',
-                color: isWinner ? 'white' : '#4CAF50'
+                marginBottom: '1rem',
+                color: '#4CAF50'
               }}>
                 {player.users.name}
+              </div>
+
+              <div style={{
+                fontSize: '1.5rem',
+                marginBottom: '2rem',
+                color: '#888'
+              }}>
+                Legs: {legsWon}
               </div>
 
               <div style={{
                 fontSize: '8rem',
                 fontWeight: 'bold',
                 lineHeight: 1,
-                color: isWinner ? 'white' : '#fff'
+                color: '#fff'
               }}>
                 {score}
               </div>
-
-              {isWinner && (
-                <div style={{
-                  marginTop: '2rem',
-                  fontSize: '2rem',
-                  fontWeight: 'bold'
-                }}>
-                  WINNER! 🏆
-                </div>
-              )}
             </div>
           )
         })}
       </div>
 
+      {upcomingMatches.length > 0 && (
+        <div style={{ marginTop: '2rem' }}>
+          <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: '#666' }}>
+            Up Next
+          </h3>
+          <div style={{ display: 'flex', gap: '1rem', overflow: 'auto' }}>
+            {upcomingMatches.slice(0, 3).map(match => (
+              <div key={match.id} style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#2a2a2a',
+                borderRadius: '8px',
+                border: '2px solid #444',
+                fontSize: '1rem',
+                whiteSpace: 'nowrap'
+              }}>
+                {match.match_players.map(mp => mp.users.name).join(' vs ')}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{
-        marginTop: '2rem',
+        marginTop: '1rem',
         textAlign: 'center',
-        fontSize: '1.25rem',
-        color: '#888'
+        fontSize: '1rem',
+        color: '#555'
       }}>
         Match #{currentMatch.id.slice(0, 8)} • {new Date(currentMatch.created_at).toLocaleTimeString()}
       </div>
