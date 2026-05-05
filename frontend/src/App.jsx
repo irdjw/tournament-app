@@ -1,7 +1,10 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
+import BarHome from './pages/bar/BarHome'
 import MatchSetup from './pages/bar/MatchSetup'
 import Scoring from './pages/bar/Scoring'
+import BarSettings from './pages/bar/Settings'
+import DisplayHome from './pages/display/DisplayHome'
 import Scoreboard from './pages/display/Scoreboard'
 import PlayerLookup from './pages/player/PlayerLookup'
 import Standings from './pages/Standings'
@@ -27,8 +30,11 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
+        {/* Bar mode */}
+        <Route path="/bar" element={<BarHome />} />
         <Route path="/bar/match-setup" element={<MatchSetup />} />
         <Route path="/bar/scoring/:matchId" element={<Scoring />} />
+        <Route path="/bar/settings" element={<BarSettings />} />
         <Route path="/bar/league/setup" element={<LeagueSetup />} />
         <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
         <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
@@ -36,11 +42,14 @@ function App() {
         <Route path="/bar/tournament/new" element={<NewTournament />} />
         <Route path="/bar/tournament/:id" element={<TournamentControl />} />
         <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
+        {/* Display mode */}
+        <Route path="/display" element={<DisplayHome />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
         <Route path="/display/tournament/:id" element={<TournamentDisplay />} />
         <Route path="/display/tournament/:id/brackets" element={<TournamentBracketsDisplay />} />
         <Route path="/display/tournament/:id/results" element={<TournamentResultsDisplay />} />
+        {/* Player / public */}
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
         <Route path="/standings/:fixtureId" element={<StandingsPublic />} />

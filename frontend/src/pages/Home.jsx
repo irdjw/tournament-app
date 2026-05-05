@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '../lib/supabase'
 
 const FOLLOWED_KEY = 'followedTournaments'
@@ -14,161 +15,140 @@ function getFollowed() {
 
 export default function Home() {
   const [followedTournaments, setFollowedTournaments] = useState([])
+  const [recentMatches, setRecentMatches] = useState([])
+  const [venueName, setVenueName] = useState('')
+  const venueUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
   useEffect(() => {
+    // Load followed tournaments
     const ids = getFollowed()
-    if (ids.length === 0) return
+    if (ids.length > 0) {
+      supabase
+        .from('tournaments')
+        .select('id, name, status')
+        .in('id', ids)
+        .then(({ data }) => { if (data) setFollowedTournaments(data) })
+    }
+
+    // Load venue name
+    supabase.from('venues').select('name').limit(1).single()
+      .then(({ data }) => { if (data) setVenueName(data.name) })
+
+    // Load recent completed matches
     supabase
-      .from('tournaments')
-      .select('id, name, status')
-      .in('id', ids)
-      .then(({ data }) => {
-        if (data) setFollowedTournaments(data)
-      })
+      .from('matches')
+      .select('id, status, created_at, match_players(team_id, legs_won, users(name))')
+      .eq('status', 'complete')
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .then(({ data }) => { if (data) setRecentMatches(data) })
   }, [])
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      backgroundColor: '#f5f5f5'
-    }}>
-      <div style={{ maxWidth: '600px', width: '100%' }}>
-        <h1 style={{
-          fontSize: '3rem',
-          textAlign: 'center',
-          marginBottom: '1rem',
-          color: '#333'
-        }}>
-          🎯 Pub Sports
-        </h1>
-        <p style={{
-          textAlign: 'center',
-          fontSize: '1.25rem',
-          color: '#666',
-          marginBottom: '3rem'
-        }}>
-          Darts scoring & league management
-        </p>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-start py-8 px-4">
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-2">🎯</div>
+          <h1 className="text-3xl font-bold text-gray-900 m-0">
+            {venueName || 'Pub Sports'}
+          </h1>
+          <p className="text-gray-500 mt-1">Darts &amp; leagues</p>
+        </div>
 
-        <div style={{ display: 'grid', gap: '1rem' }}>
+        {/* Main player actions */}
+        <div className="grid gap-3 mb-8">
           <Link
-            to="/bar/match-setup"
-            style={{
-              padding: '2rem',
-              backgroundColor: '#4CAF50',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              transition: 'transform 0.2s',
-              display: 'block'
-            }}
+            to="/standings"
+            className="flex items-center gap-4 p-4 bg-purple-600 text-white rounded-xl no-underline hover:bg-purple-500 transition-colors shadow"
           >
-            📱 Bar Mode
-            <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-              Create and score matches
+            <span className="text-3xl">🏆</span>
+            <div>
+              <div className="font-bold text-lg">View Standings</div>
+              <div className="text-purple-200 text-sm">League tables &amp; rankings</div>
             </div>
           </Link>
 
           <Link
-            to="/display/scoreboard"
-            style={{
-              padding: '2rem',
-              backgroundColor: '#2196F3',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              transition: 'transform 0.2s',
-              display: 'block'
-            }}
+            to="/tournament"
+            className="flex items-center gap-4 p-4 bg-indigo-600 text-white rounded-xl no-underline hover:bg-indigo-500 transition-colors shadow"
           >
-            📺 Display Mode
-            <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-              Live scoreboard for TV
+            <span className="text-3xl">📊</span>
+            <div>
+              <div className="font-bold text-lg">View Tournaments</div>
+              <div className="text-indigo-200 text-sm">Brackets, results &amp; progress</div>
             </div>
           </Link>
 
           <Link
             to="/player"
-            style={{
-              padding: '2rem',
-              backgroundColor: '#FF9800',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              transition: 'transform 0.2s',
-              display: 'block'
-            }}
+            className="flex items-center gap-4 p-4 bg-orange-500 text-white rounded-xl no-underline hover:bg-orange-400 transition-colors shadow"
           >
-            👤 Player Stats
-            <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-              View match history
-            </div>
-          </Link>
-
-          <Link
-            to="/standings"
-            style={{
-              padding: '2rem',
-              backgroundColor: '#9C27B0',
-              color: 'white',
-              textDecoration: 'none',
-              borderRadius: '8px',
-              textAlign: 'center',
-              fontSize: '1.5rem',
-              fontWeight: 'bold',
-              transition: 'transform 0.2s',
-              display: 'block'
-            }}
-          >
-            🏆 Standings
-            <div style={{ fontSize: '1rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-              League table
-            </div>
-          </Link>
-
-          {/* Followed tournaments */}
-          {followedTournaments.length > 0 && (
+            <span className="text-3xl">👤</span>
             <div>
-              <div style={{ fontSize: '0.8rem', color: '#888', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                Following
-              </div>
-              {followedTournaments.map(t => (
-                <Link
-                  key={t.id}
-                  to={`/tournament/${t.id}`}
-                  style={{
-                    display: 'flex',
-                    padding: '1rem 1.5rem',
-                    backgroundColor: '#1a1a2e',
-                    color: 'white',
-                    textDecoration: 'none',
-                    borderRadius: '8px',
-                    marginBottom: '0.5rem',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <span style={{ fontWeight: 'bold' }}>🏆 {t.name}</span>
-                  <span style={{ fontSize: '0.75rem', color: t.status === 'active' ? '#f59e0b' : t.status === 'complete' ? '#4ade80' : '#888', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    {t.status === 'active' ? 'Live' : t.status === 'complete' ? 'Complete' : 'Setup'}
-                  </span>
-                </Link>
-              ))}
+              <div className="font-bold text-lg">My Results</div>
+              <div className="text-orange-100 text-sm">Search your match history</div>
             </div>
-          )}
+          </Link>
+        </div>
+
+        {/* Followed tournaments */}
+        {followedTournaments.length > 0 && (
+          <section className="mb-6">
+            <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Following</div>
+            {followedTournaments.map(t => (
+              <Link
+                key={t.id}
+                to={`/tournament/${t.id}`}
+                className="flex items-center justify-between p-3 bg-gray-800 text-white rounded-xl mb-2 no-underline hover:bg-gray-700 transition-colors"
+              >
+                <span className="font-semibold">🏆 {t.name}</span>
+                <span className={`text-xs font-bold uppercase ${t.status === 'active' ? 'text-amber-400' : t.status === 'complete' ? 'text-green-400' : 'text-gray-400'}`}>
+                  {t.status === 'active' ? 'Live' : t.status === 'complete' ? 'Complete' : 'Setup'}
+                </span>
+              </Link>
+            ))}
+          </section>
+        )}
+
+        {/* Recent results */}
+        {recentMatches.length > 0 && (
+          <section className="mb-6">
+            <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Recent Results</div>
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 shadow-sm">
+              {recentMatches.map(m => {
+                const playerA = m.match_players?.find(p => p.team_id === 'team_a')
+                const playerB = m.match_players?.find(p => p.team_id === 'team_b')
+                if (!playerA || !playerB) return null
+                const winner = playerA.legs_won > playerB.legs_won ? playerA : playerB
+                return (
+                  <div key={m.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+                    <span className="text-gray-700">
+                      <span className={playerA.legs_won > playerB.legs_won ? 'font-bold text-gray-900' : 'text-gray-500'}>{playerA.users?.name}</span>
+                      <span className="mx-2 text-gray-400">{playerA.legs_won}–{playerB.legs_won}</span>
+                      <span className={playerB.legs_won > playerA.legs_won ? 'font-bold text-gray-900' : 'text-gray-500'}>{playerB.users?.name}</span>
+                    </span>
+                    <span className="text-xs text-gray-400">W: {winner.users?.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* QR Code */}
+        <section className="flex flex-col items-center text-center">
+          <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Share this venue</div>
+          <div className="bg-white p-4 rounded-xl shadow border border-gray-200 inline-block">
+            <QRCodeSVG value={venueUrl} size={140} />
+          </div>
+          <p className="text-xs text-gray-400 mt-2">{venueUrl}</p>
+        </section>
+
+        {/* Mode switcher footer */}
+        <div className="mt-8 pt-6 border-t border-gray-200 flex justify-center gap-4 text-sm">
+          <Link to="/bar" className="text-gray-500 hover:text-gray-700 transition-colors">📱 Bar Staff</Link>
+          <a href="/display" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-700 transition-colors">📺 Display ↗</a>
         </div>
       </div>
     </div>
