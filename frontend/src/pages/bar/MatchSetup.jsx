@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { assignMatchToStation } from '../../lib/stations'
 
 export default function MatchSetup() {
   const navigate = useNavigate()
@@ -9,6 +10,17 @@ export default function MatchSetup() {
   const [player2Name, setPlayer2Name] = useState('')
   const [legsToWin, setLegsToWin] = useState(3)
   const [error, setError] = useState('')
+  const [stations, setStations] = useState([])
+  const [selectedStation, setSelectedStation] = useState('')
+
+  useEffect(() => {
+    supabase
+      .from('stations')
+      .select('id, name, sport:sport_id(name)')
+      .eq('status', 'available')
+      .order('name')
+      .then(({ data }) => setStations(data || []))
+  }, [])
 
   const handleCreateMatch = async (e) => {
     e.preventDefault()
@@ -93,6 +105,11 @@ export default function MatchSetup() {
 
       if (mp2Error) throw mp2Error
 
+      // Assign to station if selected
+      if (selectedStation) {
+        await assignMatchToStation(match.id, selectedStation)
+      }
+
       // Navigate to scoring page
       navigate(`/bar/scoring/${match.id}`)
     } catch (err) {
@@ -175,6 +192,33 @@ export default function MatchSetup() {
             <option value={5}>Best of 9 (First to 5)</option>
           </select>
         </div>
+
+        {stations.length > 0 && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Station (optional):
+            </label>
+            <select
+              value={selectedStation}
+              onChange={(e) => setSelectedStation(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                fontSize: '1.1rem',
+                border: '2px solid #ccc',
+                borderRadius: '4px',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">No station</option>
+              {stations.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.sport ? ` (${s.sport.name})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { clearStationByMatchId } from '../../lib/stations'
 
 const STARTING_SCORE = 501
 
@@ -201,6 +202,8 @@ export default function Scoring() {
             .from('matches')
             .update({ status: 'complete', completed_at: new Date().toISOString() })
             .eq('id', matchId)
+
+          await clearStationByMatchId(matchId).catch(() => {})
 
           alert(`${currentPlayer.users.name} wins the match ${updatedLegsWon}-${players.find(p => p.id !== currentPlayer.id).legs_won}!`)
           navigate('/bar/match-setup')

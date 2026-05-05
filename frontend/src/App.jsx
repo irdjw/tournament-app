@@ -9,6 +9,8 @@ import LeagueSetup from './pages/bar/league/Setup'
 import FixtureDetail from './pages/bar/league/FixtureDetail'
 import RoundDetail from './pages/bar/league/RoundDetail'
 import StandingsPublic from './pages/StandingsPublic'
+import Stations from './pages/bar/Stations'
+import StationsDisplay from './pages/display/StationsDisplay'
 import './App.css'
 
 function App() {
@@ -21,7 +23,9 @@ function App() {
         <Route path="/bar/league/setup" element={<LeagueSetup />} />
         <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
         <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
+        <Route path="/bar/stations" element={<Stations />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
+        <Route path="/display/stations" element={<StationsDisplay />} />
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
         <Route path="/standings/:fixtureId" element={<StandingsPublic />} />
