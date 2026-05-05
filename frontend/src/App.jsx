@@ -11,6 +11,15 @@ import RoundDetail from './pages/bar/league/RoundDetail'
 import StandingsPublic from './pages/StandingsPublic'
 import Stations from './pages/bar/Stations'
 import StationsDisplay from './pages/display/StationsDisplay'
+import NewTournament from './pages/bar/tournament/NewTournament'
+import TournamentControl from './pages/bar/tournament/TournamentControl'
+import TournamentBracket from './pages/bar/tournament/TournamentBracket'
+import TournamentDisplay from './pages/display/TournamentDisplay'
+import TournamentBracketsDisplay from './pages/display/TournamentBracketsDisplay'
+import TournamentResultsDisplay from './pages/display/TournamentResultsDisplay'
+import TournamentOverview from './pages/tournament/TournamentOverview'
+import TournamentBracketPublic from './pages/tournament/TournamentBracketPublic'
+import TournamentResultsPublic from './pages/tournament/TournamentResultsPublic'
 import './App.css'
 
 function App() {
@@ -24,11 +33,20 @@ function App() {
         <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
         <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
         <Route path="/bar/stations" element={<Stations />} />
+        <Route path="/bar/tournament/new" element={<NewTournament />} />
+        <Route path="/bar/tournament/:id" element={<TournamentControl />} />
+        <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
+        <Route path="/display/tournament/:id" element={<TournamentDisplay />} />
+        <Route path="/display/tournament/:id/brackets" element={<TournamentBracketsDisplay />} />
+        <Route path="/display/tournament/:id/results" element={<TournamentResultsDisplay />} />
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
         <Route path="/standings/:fixtureId" element={<StandingsPublic />} />
+        <Route path="/tournament/:id" element={<TournamentOverview />} />
+        <Route path="/tournament/:id/bracket" element={<TournamentBracketPublic />} />
+        <Route path="/tournament/:id/results" element={<TournamentResultsPublic />} />
       </Routes>
     </Router>
   )

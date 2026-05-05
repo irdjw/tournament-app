@@ -1,26 +1,39 @@
 import { supabase } from './supabase'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
+// Format values match what Copilot UI pages render/check.
+
+export type TournamentFormat = 'single_elimination' | 'double_elimination' | 'group_stage'
+export type TournamentStatus = 'setup' | 'active' | 'group' | 'brackets' | 'complete'
+export type GroupType = 'group' | 'winners' | 'losers' | 'grand_final'
 
 export interface TournamentConfig {
   legs: number
-  startingScore: number
+  startingScore: 301 | 501
   doubleOut: boolean
-  playersPerGroup: number
+  /** Players per group (group_stage format). */
+  groupSize: number
+  /** How many places advance from each group to the parallel brackets. Default 2. */
   advanceFromGroup: number
 }
 
-export type TournamentFormat = 'single_elim' | 'double_elim' | 'group_to_parallel_elim'
-export type TournamentStatus = 'setup' | 'group' | 'brackets' | 'complete'
-export type GroupType = 'group' | 'winners' | 'losers'
+export interface Player {
+  id: string
+  name: string
+}
+
+export interface GroupPreview {
+  name: string
+  players: Player[]
+}
 
 export interface Tournament {
   id: string
-  venue_id: string
-  sport_id: string
   name: string
   format: TournamentFormat
   status: TournamentStatus
+  sport_id: string
+  venue_id: string
   config: TournamentConfig
   created_at: string
 }
@@ -29,17 +42,18 @@ export interface TournamentGroup {
   id: string
   tournament_id: string
   name: string
-  group_type: GroupType
+  group_type: GroupType | string
 }
 
 export interface TournamentParticipant {
   id: string
   tournament_id: string
   user_id: string
-  seed: number | null
+  seed: number
   group_id: string | null
-  status: 'active' | 'eliminated' | 'won'
+  status: string
   users?: { id: string; name: string }
+  user?: Player
 }
 
 export interface TournamentMatch {
@@ -56,10 +70,15 @@ export interface TournamentMatch {
   next_match_id: string | null
   loser_next_match_id: string | null
   station: string | null
-  status: 'pending' | 'in_progress' | 'complete'
+  status: string
+  // Joined by getTournamentFull — not present in raw DB rows
+  player_a?: Player | null
+  player_b?: Player | null
+  winner?: Player | null
+  group?: TournamentGroup | null
 }
 
-/** Intermediate structure used by buildBracketMatches (pure, no DB IDs yet). */
+/** Intermediate structure for the pure bracket builder — no DB IDs yet. */
 export interface BracketMatch {
   round: number
   position: number
@@ -67,19 +86,22 @@ export interface BracketMatch {
   player_b_id: string | null
 }
 
-export interface TournamentState {
+export interface FullTournamentData {
   tournament: Tournament
   groups: TournamentGroup[]
   participants: TournamentParticipant[]
   matches: TournamentMatch[]
+}
+
+/** Extended state (superset of FullTournamentData). */
+export interface TournamentState extends FullTournamentData {
   phase: TournamentStatus
-  /** Lowest round number that still has incomplete matches in the current phase. */
   currentRound: number
 }
 
 // ─── Pure bracket utilities ───────────────────────────────────────────────────
 
-/** Returns the smallest power of 2 that is >= n. */
+/** Smallest power of 2 >= n. */
 export function nextPowerOf2(n: number): number {
   let p = 1
   while (p < n) p <<= 1
@@ -87,19 +109,14 @@ export function nextPowerOf2(n: number): number {
 }
 
 /**
- * Returns seed numbers arranged in bracket slot order for a seeded
- * single-elimination bracket of size `p` (must be a power of 2).
+ * Seed numbers in bracket-slot order for a bracket of size `p` (power of 2).
  *
- * Guarantees that seeds 1 and 2 can only meet in the final, assuming
- * higher-seeded players always win.
+ * Guarantees seed 1 and seed 2 can only meet in the final:
+ *   p=2 → [1,2]           → Final: 1v2
+ *   p=4 → [1,4,2,3]       → SF: 1v4, 2v3 → Final: 1v2
+ *   p=8 → [1,8,4,5,2,7,3,6] → QF: 1v8, 4v5, 2v7, 3v6 → ...
  *
- * Algorithm: recursive doubling. Base: [1].
- * Each step interleaves every existing seed s with its complement (p+1-s).
- * This pushes s and its complement to opposite halves of the bracket.
- *
- * p=2 → [1, 2]            R1: 1v2          Final only
- * p=4 → [1, 4, 2, 3]      R1: 1v4, 2v3     → Final: 1v2
- * p=8 → [1,8,4,5,2,7,3,6] R1: 1v8,4v5,2v7,3v6  → SF: 1v4,2v3 → Final: 1v2
+ * Algorithm: recursive complement interleaving.
  */
 export function bracketSeeds(p: number): number[] {
   if (p === 1) return [1]
@@ -113,30 +130,23 @@ export function bracketSeeds(p: number): number[] {
 }
 
 /**
- * Generates the full match skeleton for a seeded single-elimination bracket.
+ * Full bracket match skeleton for a seeded single-elimination bracket.
  *
- * Byes are assigned to the weakest seeds so the strongest players get the
- * free first round. A bye match has player_b_id = null.
+ * Byes go to the weakest seeds (slot = null when seed > n).
+ * The winner of (round r, position p) advances to (round r+1, position ⌈p/2⌉),
+ * filling slot A when p is odd, slot B when p is even.
  *
- * Wiring rule: the match at (round r, position p) advances its winner into
- * (round r+1, position ⌈p/2⌉). The winner fills slot A if p is odd, slot B
- * if p is even.
- *
- * @param players Player IDs in seed order (index 0 = seed 1).
- *   Array length need not be a power of 2; missing entries become byes.
+ * @param players Player IDs in seed order (index 0 = seed 1). Need not be
+ *   a power-of-2 length — extra slots become byes.
  */
 export function buildBracketMatches(players: (string | null)[]): BracketMatch[] {
   const n = players.length
   const p = nextPowerOf2(n)
   const seeds = bracketSeeds(p)
-
-  // Map bracket slot → player (seeds beyond n are byes/null)
   const slots = seeds.map(seed => (seed <= n ? players[seed - 1] : null))
-
   const totalRounds = Math.log2(p)
   const matches: BracketMatch[] = []
 
-  // Round 1: pair adjacent slots
   for (let pos = 1; pos <= p / 2; pos++) {
     matches.push({
       round: 1,
@@ -145,19 +155,71 @@ export function buildBracketMatches(players: (string | null)[]): BracketMatch[] 
       player_b_id: slots[(pos - 1) * 2 + 1],
     })
   }
-
-  // Later rounds — players are filled in by advanceWinner
   for (let round = 2; round <= totalRounds; round++) {
     const count = p / Math.pow(2, round)
     for (let pos = 1; pos <= count; pos++) {
       matches.push({ round, position: pos, player_a_id: null, player_b_id: null })
     }
   }
-
   return matches
 }
 
-// ─── DB helpers ───────────────────────────────────────────────────────────────
+/**
+ * Pure group preview — used by the wizard UI before any DB writes.
+ *
+ * For `group_stage`: splits players into groups of `groupSize` using
+ * snake/serpentine seeding so no group gets all top seeds.
+ * For elimination formats: previews the bracket seeding as a single "group".
+ */
+export function previewGroups(
+  players: Player[],
+  format: TournamentFormat,
+  groupSize: number,
+): GroupPreview[] {
+  if (format !== 'group_stage') {
+    return [{ name: format === 'double_elimination' ? 'Winners Bracket' : 'Bracket', players }]
+  }
+
+  const numGroups = Math.ceil(players.length / groupSize)
+  const groups: GroupPreview[] = Array.from({ length: numGroups }, (_, i) => ({
+    name: `Group ${String.fromCharCode(65 + i)}`,
+    players: [],
+  }))
+
+  // Snake seeding
+  for (let i = 0; i < players.length; i++) {
+    const round = Math.floor(i / numGroups)
+    const posInRound = i % numGroups
+    const groupIndex = round % 2 === 0 ? posInRound : numGroups - 1 - posInRound
+    groups[groupIndex].players.push(players[i])
+  }
+  return groups.filter(g => g.players.length > 0)
+}
+
+/** Pure: matches that have both players known and are not yet complete. */
+export function getActiveMatches(matches: TournamentMatch[]): TournamentMatch[] {
+  return matches.filter(m => m.player_a_id && m.player_b_id && m.status !== 'complete')
+}
+
+// ─── DB helpers (private) ─────────────────────────────────────────────────────
+
+async function getOrCreateDefaultVenue(): Promise<string> {
+  let { data } = await supabase.from('venues').select('id').limit(1).single()
+  if (data) return data.id
+  const { data: created, error } = await supabase
+    .from('venues').insert({ name: 'Default Venue' }).select('id').single()
+  if (error) throw error
+  return created.id
+}
+
+async function getOrCreateSport(sport: string): Promise<string> {
+  let { data } = await supabase.from('sports').select('id').eq('name', sport).single()
+  if (data) return data.id
+  const { data: created, error } = await supabase
+    .from('sports').insert({ name: sport }).select('id').single()
+  if (error) throw error
+  return created.id
+}
 
 async function getDefaultVenueAndSport(): Promise<{ venueId: string; sportId: string }> {
   const [{ data: venue }, { data: sport }] = await Promise.all([
@@ -182,7 +244,7 @@ async function createUnderlyingMatch(
       venue_id: venueId,
       sport_id: sportId,
       match_type: 'tournament',
-      status: 'pending',
+      status: 'in_progress',
       legs_to_win: config.legs,
       current_leg: 1,
     })
@@ -200,9 +262,8 @@ async function createUnderlyingMatch(
 }
 
 /**
- * Inserts bracket matches into tournament_matches, wires next_match_id
- * relationships, creates underlying match records where both players are
- * already known (non-bye round-1 matches), and auto-advances byes.
+ * Inserts bracket matches for a group, wires next_match_id links, creates
+ * underlying match records for known R1 pairs, and auto-advances byes.
  */
 async function insertAndWireBracket(
   groupId: string,
@@ -212,7 +273,6 @@ async function insertAndWireBracket(
   venueId: string,
   sportId: string,
 ): Promise<TournamentMatch[]> {
-  // 1. Bulk-insert all match skeletons
   const { data: rows, error: insErr } = await supabase
     .from('tournament_matches')
     .insert(
@@ -232,10 +292,10 @@ async function insertAndWireBracket(
   const inserted = rows as TournamentMatch[]
   const maxRound = Math.max(...inserted.map(r => r.round))
 
-  // 2. Wire next_match_id: (round r, pos p) → (round r+1, pos ⌈p/2⌉)
   const idAt = (round: number, pos: number) =>
     inserted.find(r => r.round === round && r.position === pos)?.id ?? null
 
+  // Wire next_match_id: (r, p) → (r+1, ⌈p/2⌉)
   await Promise.all(
     inserted
       .filter(r => r.round < maxRound)
@@ -250,7 +310,7 @@ async function insertAndWireBracket(
       })
   )
 
-  // 3. Create underlying match records for round-1 matches with two real players
+  // Create underlying matches for R1 pairs with two real players
   const round1Real = inserted.filter(r => r.round === 1 && r.player_a_id && r.player_b_id)
   await Promise.all(
     round1Real.map(async r => {
@@ -259,7 +319,7 @@ async function insertAndWireBracket(
     })
   )
 
-  // 4. Auto-advance byes (round-1 matches with no player_b)
+  // Auto-advance byes
   const byeMatches = inserted.filter(r => r.round === 1 && r.player_a_id && !r.player_b_id)
   for (const bye of byeMatches) {
     const nextId = idAt(bye.round + 1, Math.ceil(bye.position / 2))
@@ -276,7 +336,6 @@ async function insertAndWireBracket(
     }
   }
 
-  // Re-fetch so callers get the wired state
   const { data: final } = await supabase
     .from('tournament_matches')
     .select('*')
@@ -286,8 +345,6 @@ async function insertAndWireBracket(
 
   return (final as TournamentMatch[]) ?? inserted
 }
-
-// ─── Group standings ──────────────────────────────────────────────────────────
 
 interface GroupStanding {
   userId: string
@@ -313,7 +370,6 @@ async function computeGroupStandings(groupId: string): Promise<GroupStanding[]> 
     return stats.get(userId)!
   }
 
-  // Fetch leg data for all underlying matches at once
   const matchIds = tMatches.map(m => m.match_id).filter(Boolean) as string[]
   const legsByMatch = new Map<string, { userId: string; legsWon: number }[]>()
 
@@ -359,16 +415,41 @@ async function computeGroupStandings(groupId: string): Promise<GroupStanding[]> 
 
 // ─── Exported API ─────────────────────────────────────────────────────────────
 
+export async function getOrCreateUser(name: string): Promise<Player> {
+  const email = `${name.toLowerCase().replace(/\s+/g, '')}@temp.com`
+  const { data, error } = await supabase
+    .from('users')
+    .upsert({ name, email }, { onConflict: 'email' })
+    .select('id, name')
+    .single()
+  if (error) throw error
+  return data as Player
+}
+
+/**
+ * Creates a tournament record.
+ * Auto-resolves venueId and sportId from the database.
+ */
 export async function createTournament(
-  venueId: string,
-  sportId: string,
   name: string,
   format: TournamentFormat,
-  config: TournamentConfig,
+  sport: string,
+  config: Partial<TournamentConfig>,
 ): Promise<Tournament> {
+  const venueId = await getOrCreateDefaultVenue()
+  const sportId = await getOrCreateSport(sport)
+
+  const fullConfig: TournamentConfig = {
+    legs: config.legs ?? 3,
+    startingScore: config.startingScore ?? 501,
+    doubleOut: config.doubleOut ?? true,
+    groupSize: config.groupSize ?? 4,
+    advanceFromGroup: config.advanceFromGroup ?? 2,
+  }
+
   const { data, error } = await supabase
     .from('tournaments')
-    .insert({ venue_id: venueId, sport_id: sportId, name, format, status: 'setup', config })
+    .insert({ venue_id: venueId, sport_id: sportId, name, format, status: 'setup', config: fullConfig })
     .select()
     .single()
   if (error) throw error
@@ -402,10 +483,88 @@ export async function addParticipant(
     .select('*, users(id, name)')
     .eq('tournament_id', tournamentId)
     .order('seed')
-
   return (data as unknown as TournamentParticipant[]) ?? []
 }
 
+/**
+ * Master setup function called by the wizard after createTournament.
+ * Inserts participants and generates the initial match structure.
+ */
+export async function generateTournamentStructure(
+  tournamentId: string,
+  players: Player[],
+  format: TournamentFormat,
+  config: TournamentConfig,
+): Promise<void> {
+  const { data: t } = await supabase
+    .from('tournaments')
+    .select('sport_id, venue_id')
+    .eq('id', tournamentId)
+    .single()
+
+  const venueId = t?.venue_id ?? await getOrCreateDefaultVenue()
+  const sportId = t?.sport_id ?? (await getOrCreateSport('darts'))
+
+  // 1. Insert participants
+  if (players.length > 0) {
+    const { error: pErr } = await supabase.from('tournament_participants').insert(
+      players.map((p, i) => ({
+        tournament_id: tournamentId,
+        user_id: p.id,
+        seed: i + 1,
+        status: 'active',
+      }))
+    )
+    if (pErr) throw pErr
+  }
+
+  // 2. Build match structure
+  if (format === 'group_stage') {
+    await generateGroupStage(tournamentId)
+  } else {
+    const playerIds = players.map(p => p.id)
+    if (format === 'single_elimination') {
+      const { data: bracketGroup, error: bgErr } = await supabase
+        .from('tournament_groups')
+        .insert({ tournament_id: tournamentId, name: 'Bracket', group_type: 'winners' })
+        .select()
+        .single()
+      if (bgErr) throw bgErr
+      await insertAndWireBracket(bracketGroup.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId)
+    } else {
+      // double_elimination: winners bracket contains all players; losers bracket
+      // is seeded in reverse (worst seeds first) and populated as players lose
+      const { data: bracketGroups, error: bgErr } = await supabase
+        .from('tournament_groups')
+        .insert([
+          { tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' },
+          { tournament_id: tournamentId, name: 'Losers Bracket', group_type: 'losers' },
+        ])
+        .select()
+      if (bgErr) throw bgErr
+
+      const winnersGroup = bracketGroups.find(g => g.group_type === 'winners')!
+      await insertAndWireBracket(
+        winnersGroup.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId
+      )
+      // Losers bracket matches are created on-demand via recordTournamentMatchResult
+    }
+  }
+}
+
+/** Sets tournament status to 'active' — called after structure is generated. */
+export async function startTournament(tournamentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ status: 'active' })
+    .eq('id', tournamentId)
+  if (error) throw error
+}
+
+/**
+ * Generates the initial group-stage match structure.
+ * Uses snake/serpentine seeding across groups so no group holds all top seeds.
+ */
 export async function generateGroupStage(tournamentId: string): Promise<void> {
   const [{ data: tournament }, { data: participants }] = await Promise.all([
     supabase.from('tournaments').select('*').eq('id', tournamentId).single(),
@@ -419,10 +578,9 @@ export async function generateGroupStage(tournamentId: string): Promise<void> {
   if (!participants?.length) throw new Error('No participants added')
 
   const config = tournament.config as TournamentConfig
-  const numGroups = Math.ceil(participants.length / config.playersPerGroup)
+  const numGroups = Math.ceil(participants.length / config.groupSize)
   const { venueId, sportId } = await getDefaultVenueAndSport()
 
-  // Create group records (Group A, B, C, ...)
   const { data: groups, error: gErr } = await supabase
     .from('tournament_groups')
     .insert(
@@ -435,13 +593,6 @@ export async function generateGroupStage(tournamentId: string): Promise<void> {
     .select()
   if (gErr) throw gErr
 
-  /**
-   * Snake / serpentine seeding. For 3 groups:
-   *   Round 1 (L→R): A, B, C  (seeds 1, 2, 3)
-   *   Round 2 (R→L): C, B, A  (seeds 4, 5, 6)
-   *   Round 3 (L→R): A, B, C  (seeds 7, 8, 9)
-   * Ensures no group has all top seeds.
-   */
   const groupParticipants = new Map<string, typeof participants[number][]>(
     groups!.map(g => [g.id, []])
   )
@@ -458,7 +609,6 @@ export async function generateGroupStage(tournamentId: string): Promise<void> {
       .eq('id', participants[i].id)
   }
 
-  // Create round-robin matches within each group (all pairs)
   for (const group of groups!) {
     const gParts = groupParticipants.get(group.id)!
     const matchInserts: object[] = []
@@ -483,49 +633,44 @@ export async function generateGroupStage(tournamentId: string): Promise<void> {
       .select()
     if (tmErr) throw tmErr
 
-    // Create the underlying match records so scoring works immediately
     await Promise.all(
       (tMatches as TournamentMatch[]).map(async tm => {
         if (!tm.player_a_id || !tm.player_b_id) return
         const matchId = await createUnderlyingMatch(
           tm.player_a_id, tm.player_b_id, config, venueId, sportId
         )
-        await supabase
-          .from('tournament_matches')
-          .update({ match_id: matchId })
-          .eq('id', tm.id)
+        await supabase.from('tournament_matches').update({ match_id: matchId }).eq('id', tm.id)
       })
     )
   }
 
-  await supabase.from('tournaments').update({ status: 'group' }).eq('id', tournamentId)
+  await supabase.from('tournaments').update({ status: 'active' }).eq('id', tournamentId)
 }
 
 /**
- * Called after all group-stage matches are complete.
+ * The Southfield format: after group stage, nobody is eliminated.
+ * Players finishing in the top `advanceFrom` positions go to the Winners Bracket;
+ * everyone else goes to the Losers Bracket. Both brackets run in parallel.
  *
- * The Southfield format: after the group stage nobody is eliminated — everyone
- * continues in one of two parallel single-elimination brackets:
- *
- *   WINNERS bracket  — players who finished in the top `advanceFromGroup`
- *                       positions in their group.
- *   LOSERS  bracket  — everyone else.
- *
- * Both brackets run simultaneously. This keeps all players engaged for the
- * entire night; there is no "knocked out at group stage and go home" scenario.
- *
- * Seeding uses snake/serpentine ordering across groups, so the brackets are
- * competitive and no single group dominates one side of the draw:
- *
- *   Winners bracket seeds:
- *     pos-1 L→R: GrpA-1st(s1), GrpB-1st(s2), GrpC-1st(s3)
- *     pos-2 R→L: GrpC-2nd(s4), GrpB-2nd(s5), GrpA-2nd(s6)
- *
- *   Losers bracket seeds follow the same pattern for 3rd-place finishers, etc.
- *
- * Byes are assigned to the weakest seeds so stronger players get the free round.
+ * Snake/serpentine seeding within each bracket pool ensures competitive balance —
+ * no single group dominates one side of the draw.
  */
 export async function generateParallelBrackets(tournamentId: string): Promise<void> {
+  await generateKnockoutFromGroups(tournamentId, undefined)
+}
+
+/**
+ * Generates knockout bracket(s) from completed group stage results.
+ *
+ * When `advanceFrom` is defined: top N players per group → Winners Bracket,
+ * everyone else → Losers Bracket (the Southfield parallel-elim format).
+ *
+ * When `advanceFrom` is undefined, defaults to `config.advanceFromGroup` (2).
+ */
+export async function generateKnockoutFromGroups(
+  tournamentId: string,
+  advanceFrom?: number,
+): Promise<void> {
   const [{ data: tournament }, { data: groups }] = await Promise.all([
     supabase.from('tournaments').select('*').eq('id', tournamentId).single(),
     supabase
@@ -538,23 +683,19 @@ export async function generateParallelBrackets(tournamentId: string): Promise<vo
   if (!groups?.length) throw new Error('No group stage found')
 
   const config = tournament.config as TournamentConfig
+  const advance = advanceFrom ?? config.advanceFromGroup ?? 2
   const { venueId, sportId } = await getDefaultVenueAndSport()
 
-  // Rank players within each group
   const groupStandings = await Promise.all(groups.map(g => computeGroupStandings(g.id)))
 
-  // Split into winners and losers pools (one array per group)
   const winnersPool: string[][] = groupStandings.map(s =>
-    s.slice(0, config.advanceFromGroup).map(p => p.userId)
+    s.slice(0, advance).map(p => p.userId)
   )
   const losersPool: string[][] = groupStandings.map(s =>
-    s.slice(config.advanceFromGroup).map(p => p.userId)
+    s.slice(advance).map(p => p.userId)
   )
 
-  /**
-   * Flatten a per-group pool into a single seeded array using snake ordering.
-   * Iterates by finish position across all groups, reversing direction each row.
-   */
+  /** Snake-flatten a per-group pool into a seeded array. */
   function snakeSeed(pool: string[][]): string[] {
     const maxPos = Math.max(...pool.map(g => g.length))
     const result: string[] = []
@@ -568,34 +709,40 @@ export async function generateParallelBrackets(tournamentId: string): Promise<vo
 
   const winnerSeeds = snakeSeed(winnersPool)
   const loserSeeds  = snakeSeed(losersPool)
+  const hasLosers   = loserSeeds.length > 0
 
-  // Create the two bracket groups
+  const groupsToCreate = [
+    { tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' },
+    ...(hasLosers ? [{ tournament_id: tournamentId, name: 'Losers Bracket', group_type: 'losers' }] : []),
+  ]
+
   const { data: bracketGroups, error: bgErr } = await supabase
     .from('tournament_groups')
-    .insert([
-      { tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' },
-      { tournament_id: tournamentId, name: 'Losers Bracket',  group_type: 'losers'  },
-    ])
+    .insert(groupsToCreate)
     .select()
   if (bgErr) throw bgErr
 
   const winnersGroup = bracketGroups.find(g => g.group_type === 'winners')!
-  const losersGroup  = bracketGroups.find(g => g.group_type === 'losers')!
+  const losersGroup  = bracketGroups.find(g => g.group_type === 'losers')
 
-  // Build and persist both bracket trees
-  await Promise.all([
+  const tasks = [
     insertAndWireBracket(
       winnersGroup.id, tournamentId, buildBracketMatches(winnerSeeds), config, venueId, sportId
     ),
-    insertAndWireBracket(
-      losersGroup.id,  tournamentId, buildBracketMatches(loserSeeds),  config, venueId, sportId
-    ),
-  ])
+  ]
+  if (losersGroup && loserSeeds.length > 0) {
+    tasks.push(
+      insertAndWireBracket(
+        losersGroup.id, tournamentId, buildBracketMatches(loserSeeds), config, venueId, sportId
+      )
+    )
+  }
+  await Promise.all(tasks)
 
-  // Point each participant to their bracket group
+  // Reassign participants to their bracket groups
   const assignments = [
     ...winnerSeeds.map(uid => ({ uid, groupId: winnersGroup.id })),
-    ...loserSeeds.map(uid =>  ({ uid, groupId: losersGroup.id  })),
+    ...(losersGroup ? loserSeeds.map(uid => ({ uid, groupId: losersGroup.id })) : []),
   ]
   await Promise.all(
     assignments.map(({ uid, groupId }) =>
@@ -610,6 +757,46 @@ export async function generateParallelBrackets(tournamentId: string): Promise<vo
   await supabase.from('tournaments').update({ status: 'brackets' }).eq('id', tournamentId)
 }
 
+/**
+ * Creates an underlying match record for a tournament bracket slot and marks
+ * the slot as in_progress.
+ */
+export async function createMatchForTournamentSlot(
+  tournamentMatchId: string,
+  sportId: string,
+  venueId: string,
+  config: TournamentConfig,
+  playerAId: string,
+  playerBId: string,
+): Promise<string> {
+  const matchId = await createUnderlyingMatch(playerAId, playerBId, config, venueId, sportId)
+  await supabase
+    .from('tournament_matches')
+    .update({ match_id: matchId, status: 'in_progress' })
+    .eq('id', tournamentMatchId)
+  return matchId
+}
+
+/**
+ * Records a tournament match result, advances the winner to the next bracket
+ * slot, creates the underlying match when both bracket slots are filled,
+ * and marks the tournament complete if no matches remain.
+ */
+export async function recordTournamentMatchResult(
+  tournamentMatchId: string,
+  winnerId: string,
+  loserId: string,
+): Promise<void> {
+  await advanceWinner(tournamentMatchId, winnerId)
+}
+
+/**
+ * Core bracket-advancement function.
+ * Records winner/loser, fills the winner's next-round slot (A if odd position,
+ * B if even), creates an underlying match when both slots of that round are
+ * filled, marks losers eliminated (in bracket phase), and detects
+ * tournament completion.
+ */
 export async function advanceWinner(
   tournamentMatchId: string,
   winnerId: string,
@@ -624,21 +811,22 @@ export async function advanceWinner(
   const tm = tmRow as TournamentMatch
   const loserId = tm.player_a_id === winnerId ? tm.player_b_id : tm.player_a_id
 
-  // 1. Mark this match done
   await supabase
     .from('tournament_matches')
     .update({ winner_id: winnerId, loser_id: loserId, status: 'complete' })
     .eq('id', tournamentMatchId)
 
-  const { data: tRow } = await supabase.from('tournaments').select('*').eq('id', tm.tournament_id).single()
+  const { data: tRow } = await supabase
+    .from('tournaments')
+    .select('*')
+    .eq('id', tm.tournament_id)
+    .single()
   const config = tRow?.config as TournamentConfig
 
   let complete = false
 
-  // 2. Feed winner into the next match
   if (tm.next_match_id) {
     const isSlotA = tm.position % 2 === 1
-
     const { data: nextRow } = await supabase
       .from('tournament_matches')
       .select('*')
@@ -651,7 +839,6 @@ export async function advanceWinner(
       .update(isSlotA ? { player_a_id: winnerId } : { player_b_id: winnerId })
       .eq('id', tm.next_match_id)
 
-    // Create the underlying match when both bracket slots are now filled
     const updatedA = isSlotA ? winnerId : next.player_a_id
     const updatedB = isSlotA ? next.player_b_id : winnerId
 
@@ -660,11 +847,10 @@ export async function advanceWinner(
       const matchId = await createUnderlyingMatch(updatedA, updatedB, config, venueId, sportId)
       await supabase
         .from('tournament_matches')
-        .update({ match_id: matchId })
+        .update({ match_id: matchId, status: 'in_progress' })
         .eq('id', tm.next_match_id)
     }
   } else {
-    // No next match — check if the whole tournament is now done
     const { count } = await supabase
       .from('tournament_matches')
       .select('*', { count: 'exact', head: true })
@@ -676,25 +862,21 @@ export async function advanceWinner(
         .from('tournaments')
         .update({ status: 'complete' })
         .eq('id', tm.tournament_id)
-
       await supabase
         .from('tournament_participants')
         .update({ status: 'won' })
         .eq('tournament_id', tm.tournament_id)
         .eq('user_id', winnerId)
-
       complete = true
     }
   }
 
-  // 3. Mark loser eliminated in bracket phase (not group stage)
   if (loserId) {
     const { data: group } = await supabase
       .from('tournament_groups')
       .select('group_type')
       .eq('id', tm.group_id ?? '')
       .single()
-
     if (group?.group_type !== 'group') {
       await supabase
         .from('tournament_participants')
@@ -707,7 +889,12 @@ export async function advanceWinner(
   return { complete }
 }
 
-export async function getTournamentState(tournamentId: string): Promise<TournamentState> {
+/**
+ * Returns the full tournament state with all groups, participants, and matches,
+ * where matches include joined player_a, player_b, winner and group data so
+ * UI components can read match.player_a.name etc. without extra queries.
+ */
+export async function getTournamentFull(tournamentId: string): Promise<FullTournamentData> {
   const [
     { data: tournament },
     { data: groups },
@@ -723,7 +910,13 @@ export async function getTournamentState(tournamentId: string): Promise<Tourname
       .order('seed'),
     supabase
       .from('tournament_matches')
-      .select('*')
+      .select(`
+        *,
+        player_a:player_a_id(id, name),
+        player_b:player_b_id(id, name),
+        winner:winner_id(id, name),
+        group:group_id(id, name, group_type)
+      `)
       .eq('tournament_id', tournamentId)
       .order('round')
       .order('position'),
@@ -731,18 +924,25 @@ export async function getTournamentState(tournamentId: string): Promise<Tourname
 
   if (!tournament) throw new Error('Tournament not found')
 
-  const allMatches = (matches ?? []) as TournamentMatch[]
-  const pending = allMatches.filter(m => m.status !== 'complete')
-  const currentRound = pending.length > 0
-    ? Math.min(...pending.map(m => m.round))
-    : Math.max(...allMatches.map(m => m.round), 1)
-
   return {
     tournament: tournament as Tournament,
     groups: (groups ?? []) as TournamentGroup[],
     participants: (participants as unknown as TournamentParticipant[]) ?? [],
-    matches: allMatches,
-    phase: (tournament as Tournament).status,
+    matches: (matches as unknown as TournamentMatch[]) ?? [],
+  }
+}
+
+/** Extended state — superset of FullTournamentData with phase and current round. */
+export async function getTournamentState(tournamentId: string): Promise<TournamentState> {
+  const full = await getTournamentFull(tournamentId)
+  const pending = full.matches.filter(m => m.status !== 'complete')
+  const currentRound = pending.length > 0
+    ? Math.min(...pending.map(m => m.round))
+    : Math.max(...full.matches.map(m => m.round), 1)
+
+  return {
+    ...full,
+    phase: full.tournament.status,
     currentRound,
   }
 }
