@@ -14,6 +14,9 @@ import StationsDisplay from './pages/display/StationsDisplay'
 import NewTournament from './pages/bar/tournament/NewTournament'
 import TournamentControl from './pages/bar/tournament/TournamentControl'
 import TournamentBracket from './pages/bar/tournament/TournamentBracket'
+import TournamentDisplay from './pages/display/TournamentDisplay'
+import TournamentBracketsDisplay from './pages/display/TournamentBracketsDisplay'
+import TournamentResultsDisplay from './pages/display/TournamentResultsDisplay'
 import './App.css'
 
 function App() {
@@ -32,6 +35,9 @@ function App() {
         <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
+        <Route path="/display/tournament/:id" element={<TournamentDisplay />} />
+        <Route path="/display/tournament/:id/brackets" element={<TournamentBracketsDisplay />} />
+        <Route path="/display/tournament/:id/results" element={<TournamentResultsDisplay />} />
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
         <Route path="/standings/:fixtureId" element={<StandingsPublic />} />
