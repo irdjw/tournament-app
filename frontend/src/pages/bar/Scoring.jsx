@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { clearStationByMatchId } from '../../lib/stations'
 
@@ -8,6 +8,8 @@ const STARTING_SCORE = 501
 export default function Scoring() {
   const { matchId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
 
   const [match, setMatch] = useState(null)
   const [players, setPlayers] = useState([])
@@ -206,7 +208,7 @@ export default function Scoring() {
           await clearStationByMatchId(matchId).catch(() => {})
 
           alert(`${currentPlayer.users.name} wins the match ${updatedLegsWon}-${players.find(p => p.id !== currentPlayer.id).legs_won}!`)
-          navigate('/bar/match-setup')
+          navigate(returnTo || '/bar/match-setup')
           return
         }
 
@@ -417,7 +419,7 @@ export default function Scoring() {
           Undo Last
         </button>
         <button
-          onClick={() => navigate('/bar/match-setup')}
+          onClick={() => navigate(returnTo || '/bar/match-setup')}
           style={{
             padding: '1rem',
             fontSize: '1.1rem',
@@ -429,7 +431,7 @@ export default function Scoring() {
             cursor: 'pointer'
           }}
         >
-          New Match
+          {returnTo ? '← Back to Tournament' : 'New Match'}
         </button>
       </div>
     </div>

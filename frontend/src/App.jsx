@@ -11,6 +11,9 @@ import RoundDetail from './pages/bar/league/RoundDetail'
 import StandingsPublic from './pages/StandingsPublic'
 import Stations from './pages/bar/Stations'
 import StationsDisplay from './pages/display/StationsDisplay'
+import NewTournament from './pages/bar/tournament/NewTournament'
+import TournamentControl from './pages/bar/tournament/TournamentControl'
+import TournamentBracket from './pages/bar/tournament/TournamentBracket'
 import './App.css'
 
 function App() {
@@ -24,6 +27,9 @@ function App() {
         <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
         <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
         <Route path="/bar/stations" element={<Stations />} />
+        <Route path="/bar/tournament/new" element={<NewTournament />} />
+        <Route path="/bar/tournament/:id" element={<TournamentControl />} />
+        <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
         <Route path="/player" element={<PlayerLookup />} />
