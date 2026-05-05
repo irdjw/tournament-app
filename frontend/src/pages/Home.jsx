@@ -1,6 +1,32 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+
+const FOLLOWED_KEY = 'followedTournaments'
+
+function getFollowed() {
+  try {
+    return JSON.parse(localStorage.getItem(FOLLOWED_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
 
 export default function Home() {
+  const [followedTournaments, setFollowedTournaments] = useState([])
+
+  useEffect(() => {
+    const ids = getFollowed()
+    if (ids.length === 0) return
+    supabase
+      .from('tournaments')
+      .select('id, name, status')
+      .in('id', ids)
+      .then(({ data }) => {
+        if (data) setFollowedTournaments(data)
+      })
+  }, [])
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -112,6 +138,37 @@ export default function Home() {
               League table
             </div>
           </Link>
+
+          {/* Followed tournaments */}
+          {followedTournaments.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.8rem', color: '#888', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                Following
+              </div>
+              {followedTournaments.map(t => (
+                <Link
+                  key={t.id}
+                  to={`/tournament/${t.id}`}
+                  style={{
+                    display: 'flex',
+                    padding: '1rem 1.5rem',
+                    backgroundColor: '#1a1a2e',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '8px',
+                    marginBottom: '0.5rem',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ fontWeight: 'bold' }}>🏆 {t.name}</span>
+                  <span style={{ fontSize: '0.75rem', color: t.status === 'active' ? '#f59e0b' : t.status === 'complete' ? '#4ade80' : '#888', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                    {t.status === 'active' ? 'Live' : t.status === 'complete' ? 'Complete' : 'Setup'}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
