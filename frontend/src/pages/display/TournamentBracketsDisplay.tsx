@@ -209,7 +209,9 @@ function useAutoScroll(ref: React.RefObject<HTMLDivElement>, deps: unknown[]) {
     }
     const timeout = setTimeout(() => { rafId = requestAnimationFrame(tick) }, 3000)
     return () => { clearTimeout(timeout); cancelAnimationFrame(rafId) }
-  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+    // deps is intentionally caller-controlled so the scroll resets when match data changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
 }
 
 // ─── Clock ────────────────────────────────────────────────────────────────────
