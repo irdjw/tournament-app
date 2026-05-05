@@ -315,7 +315,8 @@ async function assignPlayersToRound1(
     const bIdx = size - 1 - p
     const playerA = aIdx < n ? players[aIdx] : null
     const playerB = bIdx < n ? players[bIdx] : null
-    const id = matchIdMap.get(`1:${p}`)!
+    const id = matchIdMap.get(`1:${p}`)
+    if (!id) continue
 
     if (playerA === null && playerB === null) {
       // Both bye – shouldn't happen for valid n but skip gracefully
@@ -680,15 +681,18 @@ export async function generateKnockoutFromGroups(
   }
   for (const m of matches ?? []) {
     if (m.winner_id && m.group_id) {
-      const gs = standingsMap.get(m.group_id)!
-      gs.set(m.winner_id, (gs.get(m.winner_id) ?? 0) + 1)
+      const gs = standingsMap.get(m.group_id)
+      if (gs) {
+        gs.set(m.winner_id, (gs.get(m.winner_id) ?? 0) + 1)
+      }
     }
   }
 
   // Collect top N from each group
   const advancingPlayers: string[] = []
   for (const g of groups!) {
-    const gStandings = standingsMap.get(g.id)!
+    const gStandings = standingsMap.get(g.id)
+    if (!gStandings) continue
     const sorted = [...gStandings.entries()].sort((a, b) => b[1] - a[1])
     sorted.slice(0, advancePerGroup).forEach(([pid]) => advancingPlayers.push(pid))
   }

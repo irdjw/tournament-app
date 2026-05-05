@@ -239,7 +239,7 @@ export default function TournamentControl() {
   useEffect(() => {
     load()
     // Subscribe to changes
-    channelRef.current = supabase
+    const channel = supabase
       .channel(`tournament-${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_matches', filter: `tournament_id=eq.${id}` }, () => {
         load()
@@ -248,7 +248,8 @@ export default function TournamentControl() {
         load()
       })
       .subscribe()
-    return () => { channelRef.current?.unsubscribe() }
+    channelRef.current = channel
+    return () => { channel.unsubscribe() }
   }, [id])
 
   const handleScore = async (match: TournamentMatch) => {
