@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import { QRCodeSVG } from 'qrcode.react'
 import { getFixture, getStandings } from '../lib/fixtures'
 
 const REFRESH_INTERVAL = 30_000
@@ -117,6 +118,43 @@ export default function StandingsPublic() {
             </div>
           </>
         )}
+
+        {/* Share button */}
+        <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+          <button
+            onClick={() => {
+              const url = window.location.href
+              if (navigator.share) {
+                navigator.share({ title: fixture?.name ?? 'League Standings', url }).catch(() => {})
+              } else {
+                navigator.clipboard?.writeText(url)
+              }
+            }}
+            style={{
+              backgroundColor: '#333',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.75rem',
+              padding: '0.75rem 2rem',
+              fontSize: '0.95rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+            }}
+          >
+            ↗ Share Standings
+          </button>
+        </div>
+
+        {/* QR code */}
+        <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+          <p style={{ color: '#555', fontSize: '0.75rem', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Scan to follow on your phone
+          </p>
+          <div style={{ display: 'inline-block', backgroundColor: 'white', padding: '1rem', borderRadius: '1rem' }}>
+            <QRCodeSVG value={window.location.href} size={160} />
+          </div>
+        </div>
+
       </div>
     </div>
   )
