@@ -33,7 +33,7 @@ export default function BarHome() {
 
   const loadAll = async () => {
     try {
-      const [{ data: tData }, { data: fData }, stations] = await Promise.all([
+      const [{ data: tData }, { data: fData }, { data: roundData }, stations] = await Promise.all([
         supabase
           .from('tournaments')
           .select('id, name, status')
@@ -41,36 +41,32 @@ export default function BarHome() {
           .order('created_at', { ascending: false }),
         supabase
           .from('fixtures')
-          .select(`
-            id, name, day_of_week,
-            active_round:fixture_rounds(id, round_number)
-          `)
+          .select('id, name, day_of_week')
           .eq('active', true)
           .order('name'),
+        supabase
+          .from('fixture_rounds')
+          .select('id, round_number, fixture_id')
+          .eq('status', 'in_progress')
+          .order('round_number', { ascending: false }),
         getAllStations(),
       ])
 
       setTournaments((tData as ActiveTournament[]) ?? [])
 
-      // Only show fixtures that have an in-progress round
-      const activeFixtures: ActiveFixture[] = []
-      for (const f of (fData ?? []) as unknown as (Omit<ActiveFixture, 'active_round'> & { active_round: { id: string; round_number: number; status?: string }[] })[]) {
-        const inProgressRound = f.active_round?.find(r => (r as { status?: string }).status === 'in_progress')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: roundData } = await supabase
-          .from('fixture_rounds')
-          .select('id, round_number')
-          .eq('fixture_id', f.id)
-          .eq('status', 'in_progress')
-          .order('round_number', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        if (roundData || inProgressRound) {
-          activeFixtures.push({ ...f, active_round: roundData ?? inProgressRound ?? null })
+      // Match in-progress rounds to their fixtures (single query, no loop)
+      const roundsByFixture = new Map<string, { id: string; round_number: number }>()
+      for (const r of (roundData ?? []) as { id: string; round_number: number; fixture_id: string }[]) {
+        if (!roundsByFixture.has(r.fixture_id)) {
+          roundsByFixture.set(r.fixture_id, { id: r.id, round_number: r.round_number })
         }
       }
-      setFixtures(activeFixtures)
 
+      const activeFixtures: ActiveFixture[] = ((fData ?? []) as { id: string; name: string; day_of_week: number }[])
+        .filter(f => roundsByFixture.has(f.id))
+        .map(f => ({ ...f, active_round: roundsByFixture.get(f.id) ?? null }))
+
+      setFixtures(activeFixtures)
       setStationTotal(stations.length)
       setStationInUse(stations.filter(s => s.status === 'in_use').length)
     } finally {

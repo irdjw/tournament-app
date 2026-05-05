@@ -229,7 +229,7 @@ async function main() {
     'Chloe Finch',
     'Danny Webb',
     'Emma Price',
-    'Finn O\'Reilly',
+    "Finn O'Reilly",
     'Grace Sullivan',
     'Harry Kane',
   ]
