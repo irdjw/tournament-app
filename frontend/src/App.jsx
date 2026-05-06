@@ -20,6 +20,7 @@ import TournamentBracket from './pages/bar/tournament/TournamentBracket'
 import TournamentDisplay from './pages/display/TournamentDisplay'
 import TournamentBracketsDisplay from './pages/display/TournamentBracketsDisplay'
 import TournamentResultsDisplay from './pages/display/TournamentResultsDisplay'
+import TournamentList from './pages/tournament/TournamentList'
 import TournamentOverview from './pages/tournament/TournamentOverview'
 import TournamentBracketPublic from './pages/tournament/TournamentBracketPublic'
 import TournamentResultsPublic from './pages/tournament/TournamentResultsPublic'
@@ -53,6 +54,7 @@ function App() {
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
         <Route path="/standings/:fixtureId" element={<StandingsPublic />} />
+        <Route path="/tournament" element={<TournamentList />} />
         <Route path="/tournament/:id" element={<TournamentOverview />} />
         <Route path="/tournament/:id/bracket" element={<TournamentBracketPublic />} />
         <Route path="/tournament/:id/results" element={<TournamentResultsPublic />} />

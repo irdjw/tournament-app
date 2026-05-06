@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { assignMatchToStation } from '../../lib/stations'
+import BarNav from '../../components/BarNav'
 
 export default function MatchSetup() {
   const navigate = useNavigate()
@@ -121,6 +122,8 @@ export default function MatchSetup() {
   }
 
   return (
+    <>
+    <BarNav />
     <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '2rem', marginBottom: '2rem' }}>Create Darts Match</h1>
 
@@ -239,5 +242,6 @@ export default function MatchSetup() {
         </button>
       </form>
     </div>
+    </>
   )
 }

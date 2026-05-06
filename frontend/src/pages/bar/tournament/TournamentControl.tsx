@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
+import BarNav from '../../../components/BarNav'
 import {
   getTournamentFull,
   createMatchForTournamentSlot,
@@ -324,6 +325,7 @@ export default function TournamentControl() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <BarNav />
       <div className="max-w-3xl mx-auto px-4 py-6">
 
         {/* Header */}

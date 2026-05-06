@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import { getFixtureRound, getPairingsForRound, createPairing, completeRound } from '../../../lib/fixtures'
+import BarNav from '../../../components/BarNav'
 
 const STATUS_LABEL = { pending: 'Not Started', in_progress: 'In Progress', complete: 'Complete' }
 const STATUS_COLOR = { pending: '#888', in_progress: '#f5a623', complete: '#4CAF50' }
@@ -102,6 +103,8 @@ export default function RoundDetail() {
   const roundComplete = round?.status === 'complete'
 
   return (
+    <>
+    <BarNav />
     <div style={{ padding: '1.5rem', maxWidth: '700px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
@@ -225,6 +228,7 @@ export default function RoundDetail() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

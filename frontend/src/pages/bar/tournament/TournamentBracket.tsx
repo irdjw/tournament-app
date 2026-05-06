@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import BarNav from '../../../components/BarNav'
 import {
   getTournamentFull,
   type Tournament,
@@ -210,11 +211,8 @@ export default function TournamentBracket() {
   const grandFinalGroup = groups.find(g => g.group_type === 'grand_final')
   const grandFinalMatch = grandFinalGroup ? matches.find(m => m.group_id === grandFinalGroup.id) : null
 
-  // For group stage, show knockout bracket
-  const knockoutGroup = groups.find(g => g.group_type === 'winners' && g.name === 'Knockout')
-
-  const isDoubleElim = tournament.format === 'double_elimination'
-  const isGroupStage = tournament.format === 'group_stage'
+  // Show side-by-side whenever both brackets exist (double_elimination or group_stage parallel brackets)
+  const showBothBrackets = !!(winnersGroup && losersGroup)
 
   const formatLabel: Record<string, string> = {
     single_elimination: 'Single Elimination',
@@ -224,6 +222,7 @@ export default function TournamentBracket() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <BarNav />
       <div className="px-4 py-6">
 
         {/* Header */}
@@ -263,8 +262,8 @@ export default function TournamentBracket() {
         {/* Bracket content */}
         <div className="max-w-6xl mx-auto">
 
-          {/* Double elimination: two columns */}
-          {isDoubleElim ? (
+          {/* Side-by-side when both brackets exist (double elim or group_stage parallel) */}
+          {showBothBrackets ? (
             <div>
               <div className="flex gap-8">
                 {winnersGroup && (
@@ -286,19 +285,8 @@ export default function TournamentBracket() {
               </div>
               {grandFinalMatch && <GrandFinalSection match={grandFinalMatch} />}
             </div>
-          ) : isGroupStage && knockoutGroup ? (
-            /* Group stage knockout */
-            <div>
-              <div className="text-amber-400 font-bold text-sm uppercase tracking-wider mb-4">Knockout Bracket</div>
-              <BracketColumn
-                group={knockoutGroup}
-                matches={matches}
-                label="Knockout"
-                accentColor="text-amber-400"
-              />
-            </div>
           ) : winnersGroup ? (
-            /* Single elimination */
+            /* Single bracket */
             <BracketColumn
               group={winnersGroup}
               matches={matches}
@@ -309,7 +297,7 @@ export default function TournamentBracket() {
             <div className="text-center py-16 text-gray-600">
               <div className="text-4xl mb-4">🏆</div>
               <div className="text-lg">Bracket not yet generated</div>
-              {isGroupStage && (
+              {tournament.format === 'group_stage' && (
                 <div className="text-sm mt-2">Complete the group stage to generate the knockout bracket</div>
               )}
             </div>

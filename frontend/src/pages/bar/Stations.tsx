@@ -5,6 +5,7 @@ import {
   getAllStations, assignMatchToStation, clearStation,
   createStation, getUnassignedMatches, getScoresForMatch,
 } from '../../lib/stations'
+import BarNav from '../../components/BarNav'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -264,6 +265,8 @@ export default function Stations() {
   const inUse = stations.filter(s => s.status === 'in_use').length
 
   return (
+    <>
+    <BarNav />
     <div style={{ padding: '1.5rem', maxWidth: '900px', margin: '0 auto' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -302,5 +305,6 @@ export default function Stations() {
         <AddStationForm onAdded={load} onClose={() => setAddingStation(false)} />
       )}
     </div>
+    </>
   )
 }

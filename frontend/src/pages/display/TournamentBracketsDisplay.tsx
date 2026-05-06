@@ -282,13 +282,13 @@ export default function TournamentBracketsDisplay() {
     )
   }
 
-  const isDoubleElim = tournament.format === 'double_elimination'
   const winnersGroup = groups.find(g => g.group_type === 'winners')
   const losersGroup = groups.find(g => g.group_type === 'losers')
   const grandFinalGroup = groups.find(g => g.group_type === 'grand_final')
   const grandFinalMatch = grandFinalGroup ? matches.find(m => m.group_id === grandFinalGroup.id) : undefined
 
-  const singleGroup = !isDoubleElim ? winnersGroup : undefined
+  // Show side-by-side whenever both brackets exist (double_elimination or group_stage parallel brackets)
+  const showBothBrackets = !!(winnersGroup && losersGroup)
 
   return (
     <div
@@ -319,7 +319,7 @@ export default function TournamentBracketsDisplay() {
 
       {/* ── Bracket panels ── */}
       <div className="flex-1 flex min-h-0">
-        {isDoubleElim ? (
+        {showBothBrackets ? (
           <>
             <BracketPanel
               group={winnersGroup}
@@ -336,7 +336,7 @@ export default function TournamentBracketsDisplay() {
           </>
         ) : (
           <BracketPanel
-            group={singleGroup}
+            group={winnersGroup}
             matches={matches}
             accentColor="text-amber-400"
             scrollRef={winnersScrollRef}
@@ -345,7 +345,7 @@ export default function TournamentBracketsDisplay() {
       </div>
 
       {/* ── Grand Final ── */}
-      {isDoubleElim && grandFinalMatch && (
+      {grandFinalMatch && (
         <GrandFinal match={grandFinalMatch} />
       )}
     </div>

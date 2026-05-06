@@ -49,22 +49,22 @@ function RenameModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-80">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-6 w-80 text-white">
         <h3 className="font-bold text-lg mb-4">Rename Station</h3>
-        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
         <form onSubmit={handleSubmit}>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full border rounded-lg p-2 mb-4 text-sm"
+            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 mb-4 text-sm focus:border-amber-400 focus:outline-none"
             autoFocus
           />
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="submit" disabled={busy} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50 transition-colors">
               {busy ? 'Saving…' : 'Save'}
             </button>
-            <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm">Cancel</button>
+            <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg py-2 text-sm transition-colors">Cancel</button>
           </div>
         </form>
       </div>
@@ -107,34 +107,34 @@ function AddStationModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-80">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl shadow-xl p-6 w-80 text-white">
         <h3 className="font-bold text-lg mb-4">Add Station</h3>
-        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
         <form onSubmit={handleSubmit}>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <label className="block text-sm font-medium text-gray-400 mb-1">Name</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Board 1, Pool Table A"
-            className="w-full border rounded-lg p-2 mb-3 text-sm"
+            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 mb-3 text-sm focus:border-amber-400 focus:outline-none placeholder-gray-500"
             autoFocus
           />
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sport</label>
+          <label className="block text-sm font-medium text-gray-400 mb-1">Sport</label>
           <select
             value={sportId}
             onChange={e => setSportId(e.target.value)}
-            className="w-full border rounded-lg p-2 mb-4 text-sm"
+            className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 mb-4 text-sm focus:border-amber-400 focus:outline-none"
           >
             {sports.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="flex-1 bg-green-600 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50">
+            <button type="submit" disabled={busy} className="flex-1 bg-green-600 hover:bg-green-500 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50 transition-colors">
               {busy ? 'Adding…' : 'Add'}
             </button>
-            <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm">Cancel</button>
+            <button type="button" onClick={onClose} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg py-2 text-sm transition-colors">Cancel</button>
           </div>
         </form>
       </div>

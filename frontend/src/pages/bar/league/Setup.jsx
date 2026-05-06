@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createFixture } from '../../../lib/fixtures'
+import BarNav from '../../../components/BarNav'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -28,6 +29,8 @@ export default function LeagueSetup() {
   }
 
   return (
+    <>
+    <BarNav />
     <div style={{ padding: '2rem', maxWidth: '500px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>New League</h1>
       <p style={{ color: '#666', marginBottom: '2rem' }}>Set up a recurring league night</p>
@@ -74,6 +77,7 @@ export default function LeagueSetup() {
         </button>
       </form>
     </div>
+    </>
   )
 }
 

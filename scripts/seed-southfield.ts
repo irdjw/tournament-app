@@ -146,7 +146,7 @@ async function upsertFixture(
   return data.id
 }
 
-async function upsertFixturePlayer(
+async function upsertStanding(
   fixtureId: string,
   userId: string,
   played: number,
@@ -155,39 +155,25 @@ async function upsertFixturePlayer(
   legsFor: number,
   legsAgainst: number,
 ): Promise<void> {
-  // Check if already enrolled
-  const { data: existing } = await supabase
-    .from('fixture_players')
-    .select('id')
-    .eq('fixture_id', fixtureId)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (existing) {
-    // Update standings
-    await supabase
-      .from('fixture_players')
-      .update({ played, won, lost, legs_for: legsFor, legs_against: legsAgainst })
-      .eq('id', existing.id)
-    console.log(`  updated fixture_player → ${existing.id}`)
-    return
-  }
-
-  const { data, error } = await supabase
-    .from('fixture_players')
-    .insert({
-      fixture_id: fixtureId,
-      user_id: userId,
-      played,
-      won,
-      lost,
-      legs_for: legsFor,
-      legs_against: legsAgainst,
-    })
-    .select('id')
-    .single()
+  const points = won * 2  // 2pts for win, 0 for loss (no draws in darts)
+  const { error } = await supabase
+    .from('standings')
+    .upsert(
+      {
+        fixture_id: fixtureId,
+        user_id: userId,
+        played,
+        won,
+        drawn: 0,
+        lost,
+        legs_for: legsFor,
+        legs_against: legsAgainst,
+        points,
+      },
+      { onConflict: 'fixture_id,user_id' },
+    )
   if (error) throw error
-  console.log(`  enrolled player in fixture → ${data.id}`)
+  console.log(`  upserted standing for user ${userId}`)
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -249,7 +235,7 @@ async function main() {
   for (let i = 0; i < playerNames.length; i++) {
     const userId = await upsertUser(playerNames[i])
     const [played, won, lost, legsFor, legsAgainst] = standings[i]
-    await upsertFixturePlayer(fixtureId, userId, played, won, lost, legsFor, legsAgainst)
+    await upsertStanding(fixtureId, userId, played, won, lost, legsFor, legsAgainst)
   }
 
   console.log('\n✅  Done! The Southfield is ready to demo.\n')

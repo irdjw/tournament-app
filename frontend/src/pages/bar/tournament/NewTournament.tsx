@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
+import BarNav from '../../../components/BarNav'
 import {
   createTournament,
   generateTournamentStructure,
@@ -203,7 +205,6 @@ function StepPlayers({
   const [loading, setLoading] = useState(false)
   const [groups, setGroups] = useState<GroupPreview[]>([])
   const [groupsGenerated, setGroupsGenerated] = useState(false)
-  const dragIndex = useRef<number | null>(null)
 
   const addPlayer = async () => {
     const name = inputName.trim()
@@ -231,14 +232,12 @@ function StepPlayers({
     setGroupsGenerated(false)
   }
 
-  const handleDragStart = (idx: number) => { dragIndex.current = idx }
-  const handleDrop = (idx: number) => {
-    if (dragIndex.current === null || dragIndex.current === idx) return
-    const reordered = [...players]
-    const [moved] = reordered.splice(dragIndex.current, 1)
-    reordered.splice(idx, 0, moved)
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return
+    const reordered = Array.from(players)
+    const [moved] = reordered.splice(result.source.index, 1)
+    reordered.splice(result.destination.index, 0, moved)
     setPlayers(reordered)
-    dragIndex.current = null
     setGroupsGenerated(false)
   }
 
@@ -288,33 +287,50 @@ function StepPlayers({
       )}
 
       {/* Player list */}
-      <div className="space-y-2">
-        {players.map((p, idx) => (
-          <div
-            key={p.id}
-            draggable
-            onDragStart={() => handleDragStart(idx)}
-            onDragOver={e => e.preventDefault()}
-            onDrop={() => handleDrop(idx)}
-            className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 cursor-grab active:cursor-grabbing select-none"
-          >
-            <span className="text-amber-500 font-bold w-6 text-center text-sm">#{idx + 1}</span>
-            <span className="text-gray-400 text-lg">⠿</span>
-            <span className="flex-1 text-white font-medium text-base">{p.name}</span>
-            <button
-              onClick={() => removePlayer(p.id)}
-              className="text-gray-500 hover:text-red-400 text-lg px-2 py-1 rounded transition-colors"
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="players">
+          {provided => (
+            <div
+              {...provided.droppableProps}
+              ref={provided.innerRef}
+              className="space-y-2"
             >
-              ✕
-            </button>
-          </div>
-        ))}
-        {players.length === 0 && (
-          <div className="text-center py-8 text-gray-600 border-2 border-dashed border-gray-700 rounded-lg">
-            Add at least 4 players to continue
-          </div>
-        )}
-      </div>
+              {players.map((p, idx) => (
+                <Draggable key={p.id} draggableId={p.id} index={idx}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      className={`flex items-center gap-3 bg-gray-800 border rounded-lg px-4 py-3 select-none ${
+                        snapshot.isDragging
+                          ? 'border-amber-400 shadow-lg shadow-amber-500/20'
+                          : 'border-gray-700'
+                      }`}
+                    >
+                      <span className="text-amber-500 font-bold w-6 text-center text-sm">#{idx + 1}</span>
+                      <span className="text-gray-400 text-lg">⠿</span>
+                      <span className="flex-1 text-white font-medium text-base">{p.name}</span>
+                      <button
+                        onClick={() => removePlayer(p.id)}
+                        className="text-gray-500 hover:text-red-400 text-lg px-2 py-1 rounded transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+              {players.length === 0 && (
+                <div className="text-center py-8 text-gray-600 border-2 border-dashed border-gray-700 rounded-lg">
+                  Add at least 4 players to continue
+                </div>
+              )}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
 
       {/* Generate groups */}
       <div className="space-y-3">
@@ -535,6 +551,7 @@ export default function NewTournament() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      <BarNav />
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">

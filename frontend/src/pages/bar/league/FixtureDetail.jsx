@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getFixture, getStandings, createFixtureRound, getNextRoundNumber } from '../../../lib/fixtures'
+import BarNav from '../../../components/BarNav'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -49,6 +50,8 @@ export default function FixtureDetail() {
   const legDiff = (row) => row.legs_for - row.legs_against
 
   return (
+    <>
+    <BarNav />
     <div style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
@@ -116,6 +119,7 @@ export default function FixtureDetail() {
         Public standings link: <a href={`/standings/${fixtureId}`} style={{ color: '#4CAF50' }}>/standings/{fixtureId}</a>
       </div>
     </div>
+    </>
   )
 }
 
