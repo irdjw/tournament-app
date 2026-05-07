@@ -1,4 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import Login from './pages/Login'
+import AuthCallback from './pages/AuthCallback'
 import Home from './pages/Home'
 import BarHome from './pages/bar/BarHome'
 import MatchSetup from './pages/bar/MatchSetup'
@@ -30,20 +33,33 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* Auth */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+
         <Route path="/" element={<Home />} />
-        {/* Bar mode */}
-        <Route path="/bar" element={<BarHome />} />
-        <Route path="/bar/match-setup" element={<MatchSetup />} />
-        <Route path="/bar/scoring/:matchId" element={<Scoring />} />
-        <Route path="/bar/settings" element={<BarSettings />} />
-        <Route path="/bar/league/setup" element={<LeagueSetup />} />
-        <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
-        <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
-        <Route path="/bar/stations" element={<Stations />} />
-        <Route path="/bar/tournament/new" element={<NewTournament />} />
-        <Route path="/bar/tournament/:id" element={<TournamentControl />} />
-        <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
-        {/* Display mode */}
+
+        {/* Bar mode — requires auth */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/bar" element={<BarHome />} />
+          <Route path="/bar/match-setup" element={<MatchSetup />} />
+          <Route path="/bar/scoring/:matchId" element={<Scoring />} />
+          <Route path="/bar/settings" element={<BarSettings />} />
+          <Route path="/bar/league/setup" element={<LeagueSetup />} />
+          <Route path="/bar/league/:fixtureId" element={<FixtureDetail />} />
+          <Route path="/bar/league/round/:roundId" element={<RoundDetail />} />
+          <Route path="/bar/stations" element={<Stations />} />
+          <Route path="/bar/tournament/new" element={<NewTournament />} />
+          <Route path="/bar/tournament/:id" element={<TournamentControl />} />
+          <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
+        </Route>
+
+        {/* Admin dashboard — requires auth */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/admin/*" element={<div className="min-h-screen bg-gray-950 text-white p-8">Admin dashboard coming soon</div>} />
+        </Route>
+
+        {/* Display mode — public */}
         <Route path="/display" element={<DisplayHome />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
