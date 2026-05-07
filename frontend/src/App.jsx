@@ -46,6 +46,12 @@ import TournamentList from './pages/tournament/TournamentList'
 import TournamentOverview from './pages/tournament/TournamentOverview'
 import TournamentBracketPublic from './pages/tournament/TournamentBracketPublic'
 import TournamentResultsPublic from './pages/tournament/TournamentResultsPublic'
+import OnboardingLayout from './pages/onboarding/OnboardingLayout'
+import OnboardingVenue from './pages/onboarding/OnboardingVenue'
+import OnboardingSport from './pages/onboarding/OnboardingSport'
+import OnboardingStations from './pages/onboarding/OnboardingStations'
+import OnboardingPlayers from './pages/onboarding/OnboardingPlayers'
+import OnboardingDone from './pages/onboarding/OnboardingDone'
 import './App.css'
 
 function App() {
@@ -57,6 +63,15 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         <Route path="/" element={<Home />} />
+
+        {/* Onboarding */}
+        <Route path="/onboarding" element={<OnboardingLayout />}>
+          <Route index element={<OnboardingVenue />} />
+          <Route path="sport" element={<OnboardingSport />} />
+          <Route path="stations" element={<OnboardingStations />} />
+          <Route path="players" element={<OnboardingPlayers />} />
+          <Route path="done" element={<OnboardingDone />} />
+        </Route>
 
         {/* Bar mode — requires auth */}
         <Route element={<ProtectedRoute />}>
