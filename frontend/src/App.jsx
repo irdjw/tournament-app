@@ -2,6 +2,18 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import Login from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import Players from './pages/admin/players/Players'
+import PlayerDetail from './pages/admin/players/PlayerDetail'
+import Leagues from './pages/admin/leagues/Leagues'
+import LeagueNew from './pages/admin/leagues/LeagueNew'
+import LeagueDetail from './pages/admin/leagues/LeagueDetail'
+import Tournaments from './pages/admin/tournaments/Tournaments'
+import TournamentAdmin from './pages/admin/tournaments/TournamentAdmin'
+import MatchHistory from './pages/admin/history/MatchHistory'
+import AdminStations from './pages/admin/stations/AdminStations'
+import AdminSettings from './pages/admin/settings/AdminSettings'
 import Home from './pages/Home'
 import BarHome from './pages/bar/BarHome'
 import MatchSetup from './pages/bar/MatchSetup'
@@ -56,7 +68,19 @@ function App() {
 
         {/* Admin dashboard — requires auth */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/admin/*" element={<div className="min-h-screen bg-gray-950 text-white p-8">Admin dashboard coming soon</div>} />
+          <Route element={<AdminLayout />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/players" element={<Players />} />
+            <Route path="/admin/players/:id" element={<PlayerDetail />} />
+            <Route path="/admin/leagues" element={<Leagues />} />
+            <Route path="/admin/leagues/new" element={<LeagueNew />} />
+            <Route path="/admin/leagues/:id" element={<LeagueDetail />} />
+            <Route path="/admin/tournaments" element={<Tournaments />} />
+            <Route path="/admin/tournaments/:id" element={<TournamentAdmin />} />
+            <Route path="/admin/history" element={<MatchHistory />} />
+            <Route path="/admin/stations" element={<AdminStations />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
+          </Route>
         </Route>
 
         {/* Display mode — public */}
