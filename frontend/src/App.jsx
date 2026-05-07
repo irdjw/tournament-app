@@ -2,6 +2,13 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import Login from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
+import VenueLayout from './pages/venue/VenueLayout'
+import VenueHome from './pages/venue/VenueHome'
+import LiveScores from './pages/venue/LiveScores'
+import VenueStandings from './pages/venue/VenueStandings'
+import VenueFixtures from './pages/venue/VenueFixtures'
+import VenueTournament from './pages/venue/VenueTournament'
+import VenueResults from './pages/venue/VenueResults'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import Players from './pages/admin/players/Players'
@@ -81,6 +88,16 @@ function App() {
             <Route path="/admin/stations" element={<AdminStations />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
           </Route>
+        </Route>
+
+        {/* Venue public pages — no auth */}
+        <Route path="/v/:slug" element={<VenueLayout />}>
+          <Route index element={<VenueHome />} />
+          <Route path="live" element={<LiveScores />} />
+          <Route path="standings" element={<VenueStandings />} />
+          <Route path="fixtures" element={<VenueFixtures />} />
+          <Route path="results" element={<VenueResults />} />
+          <Route path="tournament/:id" element={<VenueTournament />} />
         </Route>
 
         {/* Display mode — public */}
