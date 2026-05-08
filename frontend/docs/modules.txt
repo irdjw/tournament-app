@@ -1,0 +1,521 @@
+MODULE OVERVIEW
+================================================================================
+DartScore — Pub Sports Scoring & Tournament Management Application
+================================================================================
+
+TECHNOLOGY STACK
+----------------
+- Frontend:    React 19 + React Router 7
+- Build Tool:  Vite 8
+- Styling:     Tailwind CSS 3.4 + PostCSS
+- Database:    Supabase (PostgreSQL) with Row-Level Security
+- Real-time:   Supabase Postgres Change Subscriptions
+- Auth:        Supabase Auth (password + magic links)
+- Language:    TypeScript / JSX (mixed)
+- Extras:      @hello-pangea/dnd (drag & drop), qrcode.react (QR codes)
+- Deployment:  Netlify (netlify.toml at repo root)
+
+--------------------------------------------------------------------------------
+PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+
+tournament-app/
+  frontend/             React application
+    src/
+      components/       Shared/reusable UI components
+      contexts/         React context providers
+      hooks/            Custom React hooks
+      lib/              Business logic and Supabase API functions
+      pages/            Feature-grouped page components
+      App.jsx           Route definitions
+      main.jsx          React entry point
+    docs/               SQL schemas, migrations, and this file
+    vite.config.js      Build configuration
+    tailwind.config.js  Tailwind configuration
+    tsconfig.json       TypeScript configuration
+  scripts/              Utility/seed scripts
+  netlify.toml          Deployment configuration
+  SETUP.md              Initial setup instructions
+
+--------------------------------------------------------------------------------
+APPLICATION MODES
+--------------------------------------------------------------------------------
+
+The app has three distinct UI modes, each targeting a different audience:
+
+1. BAR MODE  (/bar/*)
+   - For venue staff using a tablet behind the bar
+   - Match creation, live scoring, station management
+   - Tournament and fixture control
+   - Requires authentication
+
+2. DISPLAY MODE  (/display/*)
+   - For TV/monitor screens visible to players
+   - Live scoreboards, bracket displays, results
+   - No authentication required
+
+3. SPECTATOR MODE  (/v/{slug}/* and /standings/*)
+   - Public-facing pages accessible by players/spectators
+   - Venue home, live scores, league standings, match results
+   - No authentication required
+
+Additional sections:
+   ADMIN (/admin/*)         Venue admin dashboard — player, league,
+                            tournament, and station management
+   ONBOARDING (/onboarding/*) Multi-step wizard for new venue setup
+
+--------------------------------------------------------------------------------
+LIB MODULES  (src/lib/)
+--------------------------------------------------------------------------------
+
+supabase.js
+  Initialises and exports the Supabase client used by the entire application.
+  Reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from environment variables
+  and validates their presence at startup. This is the single shared client
+  instance — all other modules import from here.
+
+auth.ts
+  Authentication and authorisation utilities.
+  - getSession()       — Returns the current Supabase session
+  - getVenueAdmin()    — Looks up the venue_admin record for the signed-in user
+  - requireAuth()      — Throws/redirects if no active session
+  - requireVenueAdmin()— Throws/redirects if user is not a venue admin
+  Types: User, Venue, VenueAdmin
+
+tournaments.ts  (~700 lines)
+  The core of the tournament system. Handles all bracket logic and database
+  operations for tournaments.
+
+  Pure bracket utilities:
+  - nextPowerOf2(n)         — Returns smallest power of 2 >= n
+  - bracketSeeds(n)         — Returns seeding order so seed 1 and 2 only
+                              meet in the final
+  - buildBracketMatches()   — Constructs the full match tree for single/double
+                              elimination from a participant list
+  - previewGroups()         — Calculates group assignments using snake seeding
+                              before committing to the database
+
+  Database functions:
+  - createTournament()            — Inserts a new tournament record
+  - addParticipant()              — Registers a player in a tournament
+  - generateTournamentStructure() — Builds bracket or group structure and
+                                    writes all match slots to the DB
+  - startTournament()             — Transitions status from 'setup' to 'active'
+  - generateGroupStage()          — Creates round-robin groups with snake seeding
+  - generateParallelBrackets()    — Builds winners/losers brackets from group
+                                    results (Southfield format)
+  - recordTournamentMatchResult() — Saves a match result and triggers progression
+  - advanceWinner()               — Moves winning player to the next bracket slot
+  - getTournamentFull()           — Loads a complete tournament with all joined
+                                    data (participants, groups, matches)
+  - getTournamentState()          — Extended state including current phase and
+                                    active round number
+
+  Types: Tournament, TournamentGroup, TournamentMatch, TournamentParticipant,
+         FullTournamentData, TournamentState, TournamentFormat
+
+  Supported formats:
+  - Single elimination (with byes)
+  - Double elimination (winners + losers brackets)
+  - Group stage (round-robin groups feeding into a final bracket)
+  - Southfield format (groups → parallel winners and losers brackets)
+
+fixtures.js
+  League night / fixture management.
+  - createFixture()        — Creates a new fixture (league night event)
+  - getFixture()           — Fetches a fixture by ID
+  - createFixtureRound()   — Adds a new round to an existing fixture
+  - getFixtureRound()      — Fetches a specific round with its pairings
+  - getPairingsForRound()  — Returns all player pairings for a round
+  - createPairing()        — Creates a match pairing within a round
+  - getStandings()         — Calculates and returns the league standings table
+  Types: Fixture, FixtureRound, Pairing, Standings
+
+stations.ts
+  Physical station (dart board / pool table) management.
+  - getStationsForVenue()    — Lists all stations belonging to a venue
+  - getAllStations()          — Lists all stations (admin use)
+  - assignMatchToStation()   — Links a match to a physical station
+  - clearStation()           — Removes the current match from a station
+  - createStation()          — Adds a new station record
+  - getUnassignedMatches()   — Returns matches with no station assignment
+  - getScoresForMatch()      — Returns all scoring events for a match by leg
+  Types: Station, StationMatch, StationPlayer, UnassignedMatch
+
+--------------------------------------------------------------------------------
+HOOKS  (src/hooks/)
+--------------------------------------------------------------------------------
+
+useAuth.ts
+  Manages authentication state throughout the app. Subscribes to Supabase
+  auth change events and re-fetches venue admin data on login/logout.
+  Returns: { user, venueAdmin, venue, isLoading }
+
+useTournament.ts
+  Provides real-time tournament data with three exported hooks:
+  - useTournament(tournamentId)
+      Full tournament state with real-time Supabase subscription.
+      Returns the tournament, all participants, groups, and matches.
+  - useActiveTournamentMatches(tournamentId)
+      Filtered subset of matches that are currently in progress.
+  - useBracket(tournamentId)
+      Organises match data into labelled bracket groups (winners, losers,
+      grand final) keyed by round number for easy rendering.
+
+useDocumentTitle.ts
+  Minimal hook that sets document.title and resets it on component unmount.
+
+--------------------------------------------------------------------------------
+COMPONENTS  (src/components/)
+--------------------------------------------------------------------------------
+
+ProtectedRoute.tsx
+  Higher-order route wrapper that checks for an active Supabase session.
+  Redirects unauthenticated users to /login. Wraps all bar and admin routes.
+
+BarNav.tsx
+  Sticky top navigation bar used throughout Bar Mode. Contains Home and Back
+  buttons plus links to switch between Bar, Display, and Standings views.
+
+VenueContext.tsx
+  React Context that makes venue identity (id, name, slug) available to all
+  components under a /v/{slug} route without prop drilling.
+  Exports: VenueProvider, useVenue()
+
+--------------------------------------------------------------------------------
+PAGES  (src/pages/)
+--------------------------------------------------------------------------------
+
+PUBLIC PAGES
+------------
+
+Home.jsx
+  Marketing landing page. Describes the three app modes (Bar, Display,
+  Spectator), lists supported sports, and provides links to demo, login,
+  and the onboarding wizard.
+
+Login.tsx
+  Authentication page supporting two modes: password login and magic-link
+  (passwordless email). Handles error states with user-friendly messages
+  and redirects already-authenticated users to /admin.
+
+AuthCallback.tsx
+  Handles the OAuth redirect after a magic-link click. Exchanges the URL
+  code for a Supabase session and redirects to /admin on success or back
+  to /login with an error on failure.
+
+SPECTATOR / STANDINGS PAGES
+----------------------------
+
+Standings.jsx
+  Global all-time player standings calculated from all completed matches
+  across the platform. Rankings are determined by: points (2 per win),
+  then leg difference, then legs scored. Displays position, name, played,
+  wins/losses, legs for/against, leg diff, win %, and points.
+
+StandingsPublic.jsx
+  Fixture-specific standings for a single league night. Auto-refreshes
+  every 30 seconds. Includes a QR code for sharing and a share button.
+  Shows a responsive table on desktop and cards on mobile.
+
+PlayerLookup.jsx
+  Allows searching for a player by name to view their career statistics
+  and full match history.
+
+BAR MODE PAGES  (/bar/*)
+------------------------
+
+BarHome.tsx
+  Main hub after login. Shows at-a-glance status of active tournaments,
+  active fixtures, and station occupancy. Provides quick-action buttons
+  to start a league night, tournament, or casual match, plus links to
+  settings and the management sections.
+
+MatchSetup.jsx
+  Form for creating a casual 1v1 match. Accepts player names, a match
+  format selector (Best of 1/3/5/7/9), and optional station assignment.
+  Creates the match record in the database and redirects to the scoring
+  interface.
+
+Scoring.jsx
+  Live scoring interface for a darts match. Features:
+  - Numeric keypad for score entry
+  - 501 countdown with bust detection (score goes negative or to exactly 1)
+  - Undo last visit
+  - Multi-leg support: tracks legs won per player, auto-advances to the
+    next leg on a leg win, and detects match completion
+  - Reconstructs session history from match_events on page load
+
+Settings.tsx
+  Venue configuration panel. Allows staff to:
+  - Add, rename, and delete stations
+  - Add and toggle available sports
+  - Configure default match settings (number of legs, starting score,
+    double-out requirement)
+  Default settings are persisted in localStorage.
+
+Stations.tsx
+  Station management board for bar staff. Shows all stations as cards
+  with their current match and live scores. Allows assigning unassigned
+  matches to a station and clearing a station after a match finishes.
+  Uses real-time Supabase subscriptions to keep scores current.
+
+BAR MODE — TOURNAMENT PAGES  (/bar/tournament/*)
+-------------------------------------------------
+
+NewTournament.tsx
+  Three-step wizard for creating a tournament:
+  Step 1 — Name, sport, format (single elim / double elim / group stage /
+            Southfield), and configuration options
+  Step 2 — Player entry list with drag-and-drop reordering for seeding
+  Step 3 — Preview of groups or bracket and confirmation before generating
+            the full match structure in the database
+
+TournamentControl.tsx
+  Live control panel for an active tournament. Allows staff to start
+  individual bracket matches, record results, and see the bracket
+  progression as it unfolds.
+
+TournamentBracket.tsx
+  Visual bracket display within Bar Mode. Shows match statuses across all
+  rounds. Clicking a match opens the scoring flow for that match.
+
+BAR MODE — LEAGUE PAGES  (/bar/fixture/*)
+------------------------------------------
+
+Setup.jsx
+  Fixture creation and initial configuration for a league night.
+
+FixtureDetail.jsx
+  Detail view for an existing fixture. Shows all rounds, their status,
+  and actions to create new rounds or manage existing ones.
+
+RoundDetail.jsx
+  Manages a single round within a fixture. Displays pairings, allows
+  station assignment for each pairing, and tracks round completion.
+
+DISPLAY MODE PAGES  (/display/*)
+---------------------------------
+
+DisplayHome.tsx
+  Entry point for display screens. Auto-detects which event is currently
+  active (tournament, league night, or casual stations) and routes to the
+  appropriate display component. Provides a manual override when multiple
+  events are active simultaneously.
+
+Scoreboard.jsx
+  Live scoreboard for all active matches, grouped by station. Shows
+  current score remaining, legs won, and match format for each board.
+  Updates in real-time via Supabase subscriptions.
+
+StationsDisplay.tsx
+  Multi-board scoreboard designed for league nights. Displays all stations
+  side by side with current scores and legs. Updates in real-time.
+
+TournamentDisplay.tsx
+  Live tournament bracket display for a wall-mounted screen. Automatically
+  reflects match results and bracket advancement as they happen.
+
+TournamentBracketsDisplay.tsx
+  Detailed bracket visualisation for the display, showing all rounds and
+  match slots with player names and scores.
+
+TournamentResultsDisplay.tsx
+  Final results and standings display, shown after a tournament concludes.
+
+VENUE PUBLIC PAGES  (/v/{slug}/*)
+----------------------------------
+
+VenueLayout.tsx
+  Layout wrapper for all venue-slug pages. Provides the top navigation
+  (Home, Standings, Fixtures, Results, Live tabs) and the VenueContext
+  so all child pages know which venue they are rendering for.
+
+VenueHome.tsx
+  Public landing page for a specific venue. Lists upcoming fixtures,
+  active tournaments, and links to all venue sub-pages.
+
+LiveScores.tsx
+  Spectator-facing live scores page showing in-progress matches at
+  the venue, updating in real-time.
+
+VenueStandings.tsx
+  Public league table for the venue's most recent or active fixture.
+
+VenueFixtures.tsx
+  Archive of all league nights (fixtures) held at the venue.
+
+VenueResults.tsx
+  Results listing for completed matches at the venue.
+
+VenueTournament.tsx
+  Public tournament detail page showing bracket, participants, and
+  results for a specific tournament.
+
+ADMIN PAGES  (/admin/*)
+------------------------
+
+AdminLayout.tsx
+  Shell layout for the admin dashboard. Provides a sidebar with links
+  to all admin sections and wraps content in a consistent container.
+
+AdminDashboard.tsx
+  Overview page aggregating key metrics: active player count, matches
+  played this week, top standings, active fixture status, active
+  tournament status, and current station occupancy.
+
+Players.tsx
+  Full player directory for the venue. Lists all registered players with
+  search and links to individual player profiles.
+
+PlayerDetail.tsx
+  Profile page for a single player showing personal info, career stats,
+  and match history. Allows editing player details.
+
+Leagues.tsx
+  List of all fixtures (league nights) at the venue. Entry point for
+  managing league operations.
+
+LeagueNew.tsx
+  Form for creating a new fixture/league night, specifying the date,
+  sport, and participating players.
+
+LeagueDetail.tsx
+  Admin view of a specific fixture. Shows all rounds, standings, and
+  allows managing the fixture through its lifecycle.
+
+Tournaments.tsx
+  List of all tournaments at the venue with status indicators (setup,
+  active, complete).
+
+TournamentAdmin.tsx
+  Admin control panel for a specific tournament, combining bracket view,
+  participant management, and result entry.
+
+MatchHistory.tsx
+  Historical log of all completed matches at the venue. Allows browsing
+  and filtering past results.
+
+AdminStations.tsx
+  CRUD interface for physical stations. Add, rename, or delete boards
+  and tables at the venue.
+
+AdminSettings.tsx
+  Venue-level settings editor. Manages venue name, slug, and other
+  global configuration.
+
+ONBOARDING PAGES  (/onboarding/*)
+----------------------------------
+
+OnboardingLayout.tsx
+  Shared layout for the onboarding wizard. Displays a step progress
+  indicator and consistent navigation across all onboarding steps.
+
+OnboardingVenue.tsx
+  Step 1 — Create or select the venue record (name and URL slug).
+
+OnboardingSport.tsx
+  Step 2 — Select which sports the venue supports (Darts, Pool).
+
+OnboardingStations.tsx
+  Step 3 — Create the physical stations/boards that will be tracked.
+
+OnboardingPlayers.tsx
+  Step 4 — Import the initial player list for the venue.
+
+OnboardingDone.tsx
+  Final step — Confirmation screen with next-step guidance and links
+  to start the first league night or tournament.
+
+--------------------------------------------------------------------------------
+DATABASE SCHEMA  (Supabase / PostgreSQL)
+--------------------------------------------------------------------------------
+
+venues               — Pub/venue records (id, name, slug, settings)
+sports               — Sport types available (darts, pool, etc.)
+users                — Player accounts and profiles
+stations             — Physical boards or tables within a venue
+matches              — Match records (format, status, legs, sport)
+match_players        — Junction: player participation in a match,
+                       stores legs_won
+match_events         — Individual scoring events (visit score,
+                       remaining_score, leg_number, timestamp)
+fixtures             — League night events (date, venue, sport)
+fixture_rounds       — Individual rounds within a fixture
+fixture_pairings     — Player matchups within a round
+standings            — Cached league table rows per fixture
+tournaments          — Tournament records (name, format, status)
+tournament_groups    — Groups within a tournament (winners, losers,
+                       grand_final bracket divisions)
+tournament_participants — Players registered in a tournament with seed
+tournament_matches   — Bracket slots with round, position, and links
+                       to next_match_id for bracket progression
+venue_admins         — Maps Supabase auth users to venue admin roles
+
+SQL schemas and migration files are in frontend/docs/Supabase/.
+
+--------------------------------------------------------------------------------
+ROUTING SUMMARY
+--------------------------------------------------------------------------------
+
+/                        Home — marketing landing page
+/login                   Authentication (password + magic link)
+/auth/callback           Magic-link OAuth callback
+/onboarding/*            New venue setup wizard
+/bar/*                   Bar Mode (protected — requires auth)
+/admin/*                 Admin dashboard (protected — requires auth)
+/v/{slug}/*              Public venue pages
+/display/*               Public display/scoreboard screens
+/standings               Global all-time standings
+/player                  Player stats lookup
+/tournament              Public tournament listing
+
+--------------------------------------------------------------------------------
+KEY FEATURE NOTES
+--------------------------------------------------------------------------------
+
+Darts Scoring (501/301 Countdown)
+  Scores are entered as the visit total and subtracted from the running
+  total. A bust occurs if the result would go below zero or land on
+  exactly 1 (making double-out impossible). Undo removes the last visit
+  event from the database. Each leg is tracked independently; the leg
+  winner is determined when remaining score reaches 0. Match winner is
+  determined when a player wins ceil(legs/2) legs.
+
+Tournament Bracket Logic
+  Bracket seeding uses the standard single-elimination algorithm where
+  seed 1 and seed 2 are placed on opposite sides of the bracket and can
+  only meet in the final. Byes are automatically added to pad to the next
+  power of 2. Double elimination adds a losers bracket fed by first-round
+  losers, with the losers bracket winner facing the winners bracket
+  champion in the grand final.
+
+Real-time Updates
+  Supabase Postgres Change Subscriptions are used on display screens and
+  the bar scoring view. Components subscribe to INSERT events on
+  match_events and UPDATE events on matches/tournament_matches to push
+  live updates without polling.
+
+Venue Slug Routing
+  Each venue has a unique slug (e.g., "southfield"). Public pages are
+  served at /v/{slug}/ allowing each venue to share a branded URL with
+  its players and spectators.
+
+--------------------------------------------------------------------------------
+ENVIRONMENT VARIABLES
+--------------------------------------------------------------------------------
+
+Required in frontend/.env:
+  VITE_SUPABASE_URL       — Supabase project URL
+  VITE_SUPABASE_ANON_KEY  — Supabase anonymous (public) API key
+
+--------------------------------------------------------------------------------
+DEV SCRIPTS  (run from frontend/)
+--------------------------------------------------------------------------------
+
+  npm run dev       Start Vite development server
+  npm run build     Production build to dist/
+  npm run preview   Preview the production build locally
+  npm run lint      Run ESLint across the src/ directory
+
+================================================================================
