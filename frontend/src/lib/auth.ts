@@ -43,3 +43,12 @@ export async function requireVenueAdmin(): Promise<VenueAdmin | null> {
   if (!user) return null
   return getVenueAdmin(user.id)
 }
+
+export async function getPlatformAdmin(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('platform_admins')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  return !!data
+}

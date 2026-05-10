@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 
@@ -15,6 +16,8 @@ export default function AdminSettings() {
   const [doubleOut, setDoubleOut] = useState(true)
   const [savingDarts, setSavingDarts] = useState(false)
   const [dartsSaved, setDartsSaved] = useState(false)
+
+  const [copied, setCopied] = useState(false)
 
   const [showDangerZone, setShowDangerZone] = useState(false)
   const [confirmReset, setConfirmReset] = useState('')
@@ -104,9 +107,48 @@ export default function AdminSettings() {
 
   const publicUrl = `${window.location.origin}/v/${venueSlug}`
 
+  function handleCopy() {
+    navigator.clipboard.writeText(publicUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-bold text-white">Settings</h1>
+
+      {/* Public page card */}
+      {venueSlug && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-sm font-semibold text-white mb-4">Public Venue Page</h2>
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2 border border-gray-700">
+                <span className="text-sm text-purple-300 truncate flex-1 font-mono">{publicUrl}</span>
+                <button
+                  onClick={handleCopy}
+                  className="shrink-0 text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-colors"
+              >
+                View Public Page ↗
+              </a>
+            </div>
+            <div className="shrink-0 flex items-center justify-center sm:justify-end">
+              <div className="bg-white p-2 rounded-xl">
+                <QRCodeSVG value={publicUrl} size={100} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Venue */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">

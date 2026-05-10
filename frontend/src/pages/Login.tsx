@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getVenueAdmin } from '../lib/auth'
 
@@ -76,6 +76,9 @@ export default function Login() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
+          <Link to="/" className="text-sm text-gray-500 hover:text-gray-400 transition-colors block mb-6">
+            ← Back to home
+          </Link>
           <h1 className="text-2xl font-semibold text-white">Sign in</h1>
           <p className="mt-1 text-sm text-gray-400">Venue admin access</p>
         </div>

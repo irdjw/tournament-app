@@ -252,6 +252,13 @@ export default function AdminDashboard() {
               <span className="text-lg">📋</span>
               <span>Manage Stations</span>
             </Link>
+            <Link
+              to="/bar"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-lg bg-amber-900/40 hover:bg-amber-900/60 text-amber-300 text-sm transition-colors border border-amber-800/40"
+            >
+              <span className="text-lg">📱</span>
+              <span>Switch to Bar Mode</span>
+            </Link>
           </div>
         </div>
       </div>

@@ -23,6 +23,8 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY ??
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
   process.env.SUPABASE_ANON_KEY
+const serviceRoleKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   console.error(
@@ -32,6 +34,10 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey)
+// Admin client for auth user creation — requires service role key
+const supabaseAdmin = serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  : null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -176,6 +182,49 @@ async function upsertStanding(
   console.log(`  upserted standing for user ${userId}`)
 }
 
+async function upsertAuthUser(email: string, password: string): Promise<string | null> {
+  if (!supabaseAdmin) {
+    console.warn('  ⚠️  No service role key — skipping auth user creation.')
+    console.warn('     Set SUPABASE_SERVICE_ROLE_KEY to create the admin auth user.')
+    return null
+  }
+
+  // Check if user already exists
+  const { data: listData } = await supabaseAdmin.auth.admin.listUsers()
+  const existing = listData?.users?.find(u => u.email === email)
+  if (existing) {
+    console.log(`  auth user "${email}" already exists → ${existing.id}`)
+    return existing.id
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  })
+  if (error) throw error
+  console.log(`  created auth user "${email}" → ${data.user.id}`)
+  return data.user.id
+}
+
+async function upsertVenueAdmin(authUserId: string, venueId: string): Promise<void> {
+  const { data: existing } = await supabase
+    .from('venue_admins')
+    .select('id')
+    .eq('user_id', authUserId)
+    .eq('venue_id', venueId)
+    .maybeSingle()
+  if (existing) {
+    console.log(`  venue_admin record already exists`)
+    return
+  }
+  const { error } = await supabase
+    .from('venue_admins')
+    .insert({ user_id: authUserId, venue_id: venueId, role: 'admin' })
+  if (error) throw error
+  console.log(`  created venue_admin record`)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -238,9 +287,23 @@ async function main() {
     await upsertStanding(fixtureId, userId, played, won, lost, legsFor, legsAgainst)
   }
 
+  // 6. Admin auth user
+  console.log('\n🔐  Admin user')
+  const adminEmail = 'admin@southfield.test'
+  const adminPassword = 'southfield123'
+  const authUserId = await upsertAuthUser(adminEmail, adminPassword)
+  if (authUserId) {
+    await upsertVenueAdmin(authUserId, venueId)
+  }
+
   console.log('\n✅  Done! The Southfield is ready to demo.\n')
   console.log('   → Open the app and go to /bar to get started.')
-  console.log('   → Standings are at /standings\n')
+  console.log('   → Standings are at /standings')
+  if (authUserId) {
+    console.log('\n   Admin login credentials:')
+    console.log(`   Email:    ${adminEmail}`)
+    console.log(`   Password: ${adminPassword}\n`)
+  }
 }
 
 main().catch(err => {

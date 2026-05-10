@@ -11,6 +11,10 @@ import VenueTournament from './pages/venue/VenueTournament'
 import VenueResults from './pages/venue/VenueResults'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import ModeSelector from './pages/admin/ModeSelector'
+import GodLayout from './pages/admin/god/GodLayout'
+import GodDashboard from './pages/admin/god/GodDashboard'
+import VenueDeepDive from './pages/admin/god/VenueDeepDive'
 import Players from './pages/admin/players/Players'
 import PlayerDetail from './pages/admin/players/PlayerDetail'
 import Leagues from './pages/admin/leagues/Leagues'
@@ -52,6 +56,7 @@ import OnboardingSport from './pages/onboarding/OnboardingSport'
 import OnboardingStations from './pages/onboarding/OnboardingStations'
 import OnboardingPlayers from './pages/onboarding/OnboardingPlayers'
 import OnboardingDone from './pages/onboarding/OnboardingDone'
+import NotFoundPage from './pages/NotFoundPage'
 import './App.css'
 
 function App() {
@@ -88,8 +93,18 @@ function App() {
           <Route path="/bar/tournament/:id/bracket" element={<TournamentBracket />} />
         </Route>
 
-        {/* Admin dashboard — requires auth */}
+        {/* Admin — requires auth */}
         <Route element={<ProtectedRoute />}>
+          {/* Mode selector (platform admins only — no layout wrapper) */}
+          <Route path="/admin/mode" element={<ModeSelector />} />
+
+          {/* God Mode */}
+          <Route element={<GodLayout />}>
+            <Route path="/admin/god" element={<GodDashboard />} />
+            <Route path="/admin/god/venue/:id" element={<VenueDeepDive />} />
+          </Route>
+
+          {/* Normal venue admin */}
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/players" element={<Players />} />
@@ -115,13 +130,19 @@ function App() {
           <Route path="tournament/:id" element={<VenueTournament />} />
         </Route>
 
-        {/* Display mode — public */}
+        {/* Display mode — public (legacy unscoped routes) */}
         <Route path="/display" element={<DisplayHome />} />
         <Route path="/display/scoreboard" element={<Scoreboard />} />
         <Route path="/display/stations" element={<StationsDisplay />} />
         <Route path="/display/tournament/:id" element={<TournamentDisplay />} />
         <Route path="/display/tournament/:id/brackets" element={<TournamentBracketsDisplay />} />
         <Route path="/display/tournament/:id/results" element={<TournamentResultsDisplay />} />
+        {/* Display mode — venue-scoped routes */}
+        <Route path="/display/:venueSlug" element={<DisplayHome />} />
+        <Route path="/display/:venueSlug/scoreboard" element={<StationsDisplay />} />
+        <Route path="/display/:venueSlug/tournament/:id" element={<TournamentDisplay />} />
+        <Route path="/display/:venueSlug/tournament/:id/brackets" element={<TournamentBracketsDisplay />} />
+        <Route path="/display/:venueSlug/tournament/:id/results" element={<TournamentResultsDisplay />} />
         {/* Player / public */}
         <Route path="/player" element={<PlayerLookup />} />
         <Route path="/standings" element={<Standings />} />
@@ -130,6 +151,9 @@ function App() {
         <Route path="/tournament/:id" element={<TournamentOverview />} />
         <Route path="/tournament/:id/bracket" element={<TournamentBracketPublic />} />
         <Route path="/tournament/:id/results" element={<TournamentResultsPublic />} />
+
+        {/* 404 catch-all */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Router>
   )

@@ -156,7 +156,8 @@ export default function LiveScores() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
         <h1 className="text-2xl font-bold text-white">Live Scores</h1>
         {matches.length > 0 && (
           <div className="flex items-center gap-1.5">
@@ -167,6 +168,15 @@ export default function LiveScores() {
             <span className="text-xs text-green-400 font-medium">{matches.length} match{matches.length !== 1 ? 'es' : ''} live</span>
           </div>
         )}
+        </div>
+        <a
+          href={`/display/${venue.slug}/scoreboard`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors border border-gray-700"
+        >
+          📺 Display Mode ↗
+        </a>
       </div>
 
       {loading ? (

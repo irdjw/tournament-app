@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 interface ActiveTournament {
@@ -16,35 +16,60 @@ interface ActiveRound {
 
 export default function DisplayHome() {
   const navigate = useNavigate()
+  const { venueSlug } = useParams<{ venueSlug?: string }>()
   const [loading, setLoading] = useState(true)
   const [tournaments, setTournaments] = useState<ActiveTournament[]>([])
   const [rounds, setRounds] = useState<ActiveRound[]>([])
   const [hasStations, setHasStations] = useState(false)
 
+  const scoreboardPath = venueSlug ? `/display/${venueSlug}/scoreboard` : '/display/stations'
+  const tournamentPath = (id: string) =>
+    venueSlug ? `/display/${venueSlug}/tournament/${id}` : `/display/tournament/${id}`
+
   useEffect(() => {
     load()
-  }, [])
+  }, [venueSlug])
 
   const load = async () => {
+    let venueId: string | null = null
+
+    if (venueSlug) {
+      const { data: venue } = await supabase
+        .from('venues')
+        .select('id')
+        .eq('slug', venueSlug)
+        .single()
+      venueId = venue?.id ?? null
+      if (!venueId) {
+        setLoading(false)
+        return
+      }
+    }
+
+    const tQuery = supabase
+      .from('tournaments')
+      .select('id, name, status')
+      .in('status', ['active', 'group', 'brackets'])
+      .order('created_at', { ascending: false })
+
+    const sQuery = supabase.from('stations').select('id').limit(1)
+
     const [{ data: tData }, { data: rData }, { data: sData }] = await Promise.all([
-      supabase
-        .from('tournaments')
-        .select('id, name, status')
-        .in('status', ['active', 'group', 'brackets'])
-        .order('created_at', { ascending: false }),
+      venueId ? tQuery.eq('venue_id', venueId) : tQuery,
       supabase
         .from('fixture_rounds')
-        .select('id, round_number, fixture:fixture_id(id, name)')
+        .select('id, round_number, fixture:fixture_id(id, name, venue_id)')
         .eq('status', 'in_progress')
         .order('round_number', { ascending: false }),
-      supabase
-        .from('stations')
-        .select('id')
-        .limit(1),
+      venueId ? sQuery.eq('venue_id', venueId) : sQuery,
     ])
 
     const activeTournaments = (tData as ActiveTournament[]) ?? []
-    const activeRounds = (rData as unknown as ActiveRound[]) ?? []
+    const allRounds = (rData as unknown as ActiveRound[]) ?? []
+    // Filter rounds by venue if scoped
+    const activeRounds = venueId
+      ? allRounds.filter((r: any) => r.fixture?.venue_id === venueId)
+      : allRounds
 
     setTournaments(activeTournaments)
     setRounds(activeRounds)
@@ -53,16 +78,15 @@ export default function DisplayHome() {
 
     // Auto-redirect if exactly one clear option
     if (activeTournaments.length === 1 && activeRounds.length === 0) {
-      navigate(`/display/tournament/${activeTournaments[0].id}`, { replace: true })
+      navigate(tournamentPath(activeTournaments[0].id), { replace: true })
       return
     }
     if (activeRounds.length === 1 && activeTournaments.length === 0) {
-      navigate('/display/stations', { replace: true })
+      navigate(scoreboardPath, { replace: true })
       return
     }
     if (activeTournaments.length === 0 && activeRounds.length === 0) {
-      // Nothing active — show stations scoreboard
-      navigate('/display/stations', { replace: true })
+      navigate(scoreboardPath, { replace: true })
       return
     }
   }
@@ -84,7 +108,7 @@ export default function DisplayHome() {
       <div className="grid gap-4 w-full max-w-lg">
         {hasStations && (
           <Link
-            to="/display/stations"
+            to={scoreboardPath}
             className="block p-5 bg-gray-800 rounded-2xl hover:bg-gray-700 transition-colors no-underline text-white border border-gray-600"
           >
             <div className="text-2xl mb-1">📋</div>
@@ -96,7 +120,7 @@ export default function DisplayHome() {
         {tournaments.map(t => (
           <Link
             key={t.id}
-            to={`/display/tournament/${t.id}`}
+            to={tournamentPath(t.id)}
             className="block p-5 bg-gray-800 rounded-2xl hover:bg-gray-700 transition-colors no-underline text-white border border-purple-700/50"
           >
             <div className="text-2xl mb-1">🏆</div>
@@ -107,7 +131,7 @@ export default function DisplayHome() {
 
         {rounds.length > 0 && (
           <Link
-            to="/display/stations"
+            to={scoreboardPath}
             className="block p-5 bg-gray-800 rounded-2xl hover:bg-gray-700 transition-colors no-underline text-white border border-amber-700/50"
           >
             <div className="text-2xl mb-1">🍺</div>

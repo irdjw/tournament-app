@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Station, StationPlayer, getAllStations, getScoresForMatch } from '../../lib/stations'
+import { Station, StationPlayer, getAllStations, getStationsForVenue, getScoresForMatch } from '../../lib/stations'
 
 const CARDS_PER_PAGE = 4
 const CYCLE_MS = 10_000
@@ -102,26 +103,54 @@ function IdleScreen() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function StationsDisplay() {
+  const { venueSlug } = useParams<{ venueSlug?: string }>()
+  const [venueId, setVenueId] = useState<string | null>(null)
   const [stations, setStations] = useState<Station[]>([])
   const [page, setPage] = useState(0)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const cycleRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    getAllStations().then(setStations)
+    if (!venueSlug) {
+      getAllStations().then(setStations)
+      channelRef.current = supabase
+        .channel('tv-stations')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stations' }, () => {
+          getAllStations().then(s => { setStations(s); setPage(0) })
+        })
+        .subscribe()
+      return () => {
+        channelRef.current?.unsubscribe()
+        if (cycleRef.current) clearInterval(cycleRef.current)
+      }
+    }
 
-    channelRef.current = supabase
-      .channel('tv-stations')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stations' }, () => {
-        getAllStations().then(s => { setStations(s); setPage(0) })
+    supabase
+      .from('venues')
+      .select('id')
+      .eq('slug', venueSlug)
+      .single()
+      .then(({ data }) => {
+        if (!data) return
+        const vid = data.id
+        setVenueId(vid)
+        getStationsForVenue(vid).then(setStations)
+        channelRef.current = supabase
+          .channel(`tv-stations-${venueSlug}`)
+          .on('postgres_changes', {
+            event: '*', schema: 'public', table: 'stations',
+            filter: `venue_id=eq.${vid}`,
+          }, () => {
+            getStationsForVenue(vid).then(s => { setStations(s); setPage(0) })
+          })
+          .subscribe()
       })
-      .subscribe()
 
     return () => {
       channelRef.current?.unsubscribe()
       if (cycleRef.current) clearInterval(cycleRef.current)
     }
-  }, [])
+  }, [venueSlug])
 
   // Auto-cycle when there are more active matches than fit on screen
   const active = stations.filter(s => s.status === 'in_use')

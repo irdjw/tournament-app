@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import BarNav from '../../components/BarNav'
 import { getAllStations } from '../../lib/stations'
+import { useAuth } from '../../hooks/useAuth'
 
 interface ActiveTournament {
   id: string
@@ -21,6 +22,8 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function BarHome() {
   const navigate = useNavigate()
+  const { venueAdmin } = useAuth()
+  const venueSlug = venueAdmin?.venue?.slug
   const [tournaments, setTournaments] = useState<ActiveTournament[]>([])
   const [fixtures, setFixtures] = useState<ActiveFixture[]>([])
   const [stationTotal, setStationTotal] = useState(0)
@@ -95,13 +98,33 @@ export default function BarHome() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6 mt-2">
           <h1 className="text-2xl font-bold">Bar Mode</h1>
-          <Link
-            to="/bar/settings"
-            className="text-gray-400 hover:text-white text-2xl transition-colors"
-            title="Settings"
-          >
-            ⚙️
-          </Link>
+          <div className="flex items-center gap-3">
+            {venueSlug && (
+              <a
+                href={`/v/${venueSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-gray-400 hover:text-purple-400 transition-colors"
+                title="View public page"
+              >
+                Public ↗
+              </a>
+            )}
+            <Link
+              to="/admin"
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+              title="Admin dashboard"
+            >
+              Admin
+            </Link>
+            <Link
+              to="/bar/settings"
+              className="text-gray-400 hover:text-white text-2xl transition-colors"
+              title="Settings"
+            >
+              ⚙️
+            </Link>
+          </div>
         </div>
 
         {/* Station status banner */}
@@ -208,6 +231,22 @@ export default function BarHome() {
             >
               ⚙️ Settings
             </Link>
+            <Link
+              to="/admin"
+              className="p-3 bg-gray-800 rounded-xl text-center text-sm font-medium hover:bg-gray-700 transition-colors no-underline text-gray-200"
+            >
+              🛠 Admin
+            </Link>
+            {venueSlug && (
+              <a
+                href={`/v/${venueSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-3 bg-gray-800 rounded-xl text-center text-sm font-medium hover:bg-gray-700 transition-colors no-underline text-purple-300"
+              >
+                🌐 Public Page ↗
+              </a>
+            )}
           </div>
         </section>
       </div>
