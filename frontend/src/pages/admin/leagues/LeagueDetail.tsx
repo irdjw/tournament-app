@@ -103,12 +103,13 @@ export default function LeagueDetail() {
         .single()
       if (uErr) throw uErr
 
-      await supabase
+      const { error: sErr } = await supabase
         .from('standings')
         .upsert(
           { fixture_id: id, user_id: user.id, played: 0, wins: 0, losses: 0, legs_for: 0, legs_against: 0, points: 0 },
           { onConflict: 'fixture_id,user_id' },
         )
+      if (sErr) throw sErr
 
       setNewPlayerName('')
       setShowAddPlayer(false)
