@@ -346,6 +346,149 @@ async function insertAndWireBracket(
   return (final as TournamentMatch[]) ?? inserted
 }
 
+/**
+ * Builds the full double-elimination structure: Winners Bracket, Losers Bracket,
+ * and a Grand Final match. Wires next_match_id within each bracket and sets
+ * loser_next_match_id on every WB match so losers drop into the correct LB slot.
+ *
+ * LB round layout (2*(k-1) rounds for 2^k players):
+ *   Odd rounds  (consolidation) — LB survivors play each other
+ *   Even rounds (drop-in)       — fresh WB losers enter against LB survivors
+ */
+async function buildDoubleElimination(
+  tournamentId: string,
+  players: Player[],
+  config: TournamentConfig,
+  venueId: string,
+  sportId: string,
+): Promise<void> {
+  const p = nextPowerOf2(players.length)
+  const k = Math.log2(p)
+  const playerIds = players.map(pl => pl.id)
+
+  if (k < 2) {
+    const { data: g, error: gErr } = await supabase
+      .from('tournament_groups')
+      .insert({ tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' })
+      .select().single()
+    if (gErr) throw gErr
+    await insertAndWireBracket(g.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId)
+    return
+  }
+
+  const { data: groups, error: gErr } = await supabase
+    .from('tournament_groups')
+    .insert([
+      { tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' },
+      { tournament_id: tournamentId, name: 'Losers Bracket', group_type: 'losers' },
+      { tournament_id: tournamentId, name: 'Grand Final', group_type: 'grand_final' },
+    ])
+    .select()
+  if (gErr) throw gErr
+
+  const wbGroup = (groups as any[]).find(g => g.group_type === 'winners')!
+  const lbGroup = (groups as any[]).find(g => g.group_type === 'losers')!
+  const gfGroup = (groups as any[]).find(g => g.group_type === 'grand_final')!
+
+  const wbMatches = await insertAndWireBracket(
+    wbGroup.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId
+  )
+
+  // Build LB match shells
+  // LR1, LR2: p/4 matches; LR3, LR4: p/8 matches; … LR(2k-3), LR(2k-2): 1 match
+  const lbRounds = 2 * (k - 1)
+  const lbMatchInserts: { round: number; position: number }[] = []
+  for (let lbRound = 1; lbRound <= lbRounds; lbRound++) {
+    const rc = Math.ceil(lbRound / 2)
+    const count = p / Math.pow(2, rc + 1)
+    for (let pos = 1; pos <= count; pos++) {
+      lbMatchInserts.push({ round: lbRound, position: pos })
+    }
+  }
+
+  const { data: lbRows, error: lbErr } = await supabase
+    .from('tournament_matches')
+    .insert(
+      lbMatchInserts.map(m => ({
+        group_id: lbGroup.id,
+        tournament_id: tournamentId,
+        round: m.round,
+        position: m.position,
+        player_a_id: null,
+        player_b_id: null,
+        status: 'pending',
+      }))
+    )
+    .select()
+  if (lbErr) throw lbErr
+
+  const lbMatches = lbRows as TournamentMatch[]
+  const lbAt = (round: number, pos: number) =>
+    lbMatches.find(m => m.round === round && m.position === pos)
+
+  // Wire next_match_id within LB
+  // Consolidation (odd) → next round same position (1-to-1)
+  // Drop-in (even) → next round ceil(pos/2) (2-to-1 pairing)
+  await Promise.all(
+    lbMatches
+      .filter(m => m.round < lbRounds)
+      .map(m => {
+        const nextPos = m.round % 2 === 1 ? m.position : Math.ceil(m.position / 2)
+        const nextMatch = lbAt(m.round + 1, nextPos)
+        if (!nextMatch) return Promise.resolve()
+        return supabase
+          .from('tournament_matches')
+          .update({ next_match_id: nextMatch.id })
+          .eq('id', m.id)
+          .then(({ error: e }) => { if (e) throw e })
+      })
+  )
+
+  // Create Grand Final match shell
+  const { data: gfRow, error: gfErr } = await supabase
+    .from('tournament_matches')
+    .insert({
+      group_id: gfGroup.id,
+      tournament_id: tournamentId,
+      round: 1,
+      position: 1,
+      player_a_id: null,
+      player_b_id: null,
+      status: 'pending',
+    })
+    .select()
+    .single()
+  if (gfErr) throw gfErr
+  const gfMatchId = (gfRow as TournamentMatch).id
+
+  // Wire LB final and WB final → Grand Final
+  const lbFinal = lbAt(lbRounds, 1)
+  if (lbFinal) {
+    await supabase.from('tournament_matches').update({ next_match_id: gfMatchId }).eq('id', lbFinal.id)
+  }
+  const wbFinal = wbMatches.find(m => !m.next_match_id)
+  if (wbFinal) {
+    await supabase.from('tournament_matches').update({ next_match_id: gfMatchId }).eq('id', wbFinal.id)
+  }
+
+  // Wire loser_next_match_id: WB round-r losers → LB drop-in rounds
+  // WR1 losers → LR1 (consolidation):  WR1Pi → LR1P(ceil(i/2))
+  // WRr (r≥2) losers → LR(2r-2) (drop-in): WRrPi → LR(2r-2)Pi
+  await Promise.all(
+    wbMatches.map(m => {
+      const targetLbRound = m.round === 1 ? 1 : 2 * (m.round - 1)
+      const targetLbPos   = m.round === 1 ? Math.ceil(m.position / 2) : m.position
+      const lbMatch = lbAt(targetLbRound, targetLbPos)
+      if (!lbMatch) return Promise.resolve()
+      return supabase
+        .from('tournament_matches')
+        .update({ loser_next_match_id: lbMatch.id })
+        .eq('id', m.id)
+        .then(({ error: e }) => { if (e) throw e })
+    })
+  )
+}
+
 interface GroupStanding {
   userId: string
   wins: number
@@ -532,23 +675,8 @@ export async function generateTournamentStructure(
       if (bgErr) throw bgErr
       await insertAndWireBracket(bracketGroup.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId)
     } else {
-      // double_elimination: winners bracket contains all players; losers bracket
-      // is seeded in reverse (worst seeds first) and populated as players lose
-      const { data: bracketGroups, error: bgErr } = await supabase
-        .from('tournament_groups')
-        .insert([
-          { tournament_id: tournamentId, name: 'Winners Bracket', group_type: 'winners' },
-          { tournament_id: tournamentId, name: 'Losers Bracket', group_type: 'losers' },
-        ])
-        .select()
-      if (bgErr) throw bgErr
-
-      const winnersGroup = bracketGroups.find(g => g.group_type === 'winners')!
-      await insertAndWireBracket(
-        winnersGroup.id, tournamentId, buildBracketMatches(playerIds), config, venueId, sportId
-      )
-      // Losers bracket matches are created on-demand via recordTournamentMatchResult
-    }
+        await buildDoubleElimination(tournamentId, players, config, venueId, sportId)
+      }
   }
 }
 
@@ -792,10 +920,16 @@ export async function recordTournamentMatchResult(
 
 /**
  * Core bracket-advancement function.
- * Records winner/loser, fills the winner's next-round slot (A if odd position,
- * B if even), creates an underlying match when both slots of that round are
- * filled, marks losers eliminated (in bracket phase), and detects
- * tournament completion.
+ *
+ * Records winner/loser, then:
+ *  - Routes winner to next_match_id slot. Uses position-based slot (odd→A, even→B)
+ *    for winners-bracket advancement; "fill first empty slot" for losers-bracket
+ *    and grand-final targets so order of arrival doesn't matter.
+ *  - Routes loser to loser_next_match_id (double elimination LB drop-in), using
+ *    "fill first empty slot". If no LB route, marks loser eliminated.
+ *  - Creates the underlying match record when both slots of a bracket slot are filled.
+ *  - Detects tournament completion. For parallel-bracket (group_stage) formats the
+ *    winners-bracket champion is the overall winner, not whoever won the last match.
  */
 export async function advanceWinner(
   tournamentMatchId: string,
@@ -826,13 +960,20 @@ export async function advanceWinner(
   let complete = false
 
   if (tm.next_match_id) {
-    const isSlotA = tm.position % 2 === 1
     const { data: nextRow } = await supabase
       .from('tournament_matches')
-      .select('*')
+      .select('*, group:group_id(id, name, group_type)')
       .eq('id', tm.next_match_id)
       .single()
     const next = nextRow as TournamentMatch
+    const nextGroupType = (nextRow as any).group?.group_type as string | undefined
+
+    // Losers bracket and grand final: fill the first empty slot so arrival order
+    // doesn't matter (WB loser and LB survivor can arrive in either order).
+    // Winners bracket: use position to preserve seeding structure.
+    const isSlotA = (nextGroupType === 'losers' || nextGroupType === 'grand_final')
+      ? !next.player_a_id
+      : tm.position % 2 === 1
 
     await supabase
       .from('tournament_matches')
@@ -858,6 +999,33 @@ export async function advanceWinner(
       .neq('status', 'complete')
 
     if ((count ?? 1) === 0) {
+      // In parallel-bracket (group_stage) format the losers bracket may complete last,
+      // but the winners bracket champion is always the tournament winner.
+      let championId = winnerId
+      const { data: matchGroup } = await supabase
+        .from('tournament_groups')
+        .select('group_type')
+        .eq('id', tm.group_id ?? '')
+        .single()
+      if (matchGroup?.group_type === 'losers') {
+        const { data: wGroups } = await supabase
+          .from('tournament_groups')
+          .select('id')
+          .eq('tournament_id', tm.tournament_id)
+          .eq('group_type', 'winners')
+        const wgIds = ((wGroups ?? []) as any[]).map(g => g.id)
+        if (wgIds.length > 0) {
+          const { data: wFinal } = await supabase
+            .from('tournament_matches')
+            .select('winner_id')
+            .in('group_id', wgIds)
+            .is('next_match_id', null)
+            .not('winner_id', 'is', null)
+            .maybeSingle()
+          if (wFinal?.winner_id) championId = wFinal.winner_id
+        }
+      }
+
       await supabase
         .from('tournaments')
         .update({ status: 'complete' })
@@ -866,12 +1034,41 @@ export async function advanceWinner(
         .from('tournament_participants')
         .update({ status: 'won' })
         .eq('tournament_id', tm.tournament_id)
-        .eq('user_id', winnerId)
+        .eq('user_id', championId)
       complete = true
     }
   }
 
-  if (loserId) {
+  // Route loser to losers bracket (double elimination) or mark eliminated
+  if (loserId && tm.loser_next_match_id) {
+    const { data: lbRow } = await supabase
+      .from('tournament_matches')
+      .select('player_a_id, player_b_id, match_id')
+      .eq('id', tm.loser_next_match_id)
+      .single()
+
+    if (lbRow) {
+      const lbMatch = lbRow as { player_a_id: string | null; player_b_id: string | null; match_id: string | null }
+      const goToSlotA = !lbMatch.player_a_id
+
+      await supabase
+        .from('tournament_matches')
+        .update(goToSlotA ? { player_a_id: loserId } : { player_b_id: loserId })
+        .eq('id', tm.loser_next_match_id)
+
+      const updatedA = goToSlotA ? loserId : lbMatch.player_a_id
+      const updatedB = goToSlotA ? lbMatch.player_b_id : loserId
+
+      if (updatedA && updatedB && !lbMatch.match_id) {
+        const { venueId, sportId } = await getDefaultVenueAndSport()
+        const matchId = await createUnderlyingMatch(updatedA, updatedB, config, venueId, sportId)
+        await supabase
+          .from('tournament_matches')
+          .update({ match_id: matchId, status: 'in_progress' })
+          .eq('id', tm.loser_next_match_id)
+      }
+    }
+  } else if (loserId) {
     const { data: group } = await supabase
       .from('tournament_groups')
       .select('group_type')
