@@ -602,7 +602,7 @@ export default function NewTournament() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-white mb-1">
-            {fromId ? 'Set Up Tonight's Tournament' : 'New Tournament'}
+            {fromId ? "Set Up Tonight's Tournament" : 'New Tournament'}
           </h1>
           <p className="text-gray-400 text-sm">
             {fromId ? 'Pick a format, add players, and start.' : `Set up a new tournament in ${stepLabels.length} steps`}
