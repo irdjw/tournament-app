@@ -23,8 +23,9 @@ interface TMatch {
 interface Tournament {
   id: string
   name: string
-  format: string
+  format: string | null
   status: string
+  scheduled_for: string | null
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -80,7 +81,7 @@ export default function TournamentAdmin() {
   async function load() {
     if (!id) return
     const [tourRes, partRes, matchRes] = await Promise.all([
-      supabase.from('tournaments').select('id, name, format, status').eq('id', id).single(),
+      supabase.from('tournaments').select('id, name, format, status, scheduled_for').eq('id', id).single(),
       supabase
         .from('tournament_participants')
         .select('id, user_id, seed, users:user_id(name)')
@@ -186,7 +187,16 @@ export default function TournamentAdmin() {
               {badge.label}
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-1 capitalize">{tournament.format.replace(/_/g, ' ')}</p>
+          <p className="text-sm text-gray-400 mt-1 capitalize">
+            {tournament.format
+              ? tournament.format.replace(/_/g, ' ')
+              : <span className="text-amber-500/80">Format TBD – choose on the night</span>}
+          </p>
+          {tournament.scheduled_for && (
+            <p className="text-xs text-gray-600 mt-0.5">
+              {new Date(tournament.scheduled_for + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           {tournament.status === 'complete' && (
@@ -197,12 +207,21 @@ export default function TournamentAdmin() {
               Export CSV
             </button>
           )}
-          <Link
-            to={`/bar/tournament/${id}`}
-            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-colors"
-          >
-            Open in Bar Mode
-          </Link>
+          {isSetup && !tournament.format ? (
+            <Link
+              to={`/bar/tournament/new?from=${id}`}
+              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold transition-colors"
+            >
+              Set up for tonight →
+            </Link>
+          ) : (
+            <Link
+              to={`/bar/tournament/${id}`}
+              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-colors"
+            >
+              Open in Bar Mode
+            </Link>
+          )}
         </div>
       </div>
 

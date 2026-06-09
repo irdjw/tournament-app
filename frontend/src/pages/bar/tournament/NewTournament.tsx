@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import BarNav from '../../../components/BarNav'
+import { supabase } from '../../../lib/supabase'
 import {
   createTournament,
   generateTournamentStructure,
   startTournament,
+  updateTournamentFormatAndConfig,
   previewGroups,
   getOrCreateUser,
   type TournamentFormat,
@@ -20,18 +22,27 @@ type Step = 1 | 2 | 3
 
 // ─── Step 1 — Details ────────────────────────────────────────────────────────
 
+interface StepDetailsInitial {
+  name: string
+  sport: 'darts' | 'pool'
+  config: TournamentConfig
+  isScheduled: boolean
+}
+
 function StepDetails({
   onNext,
+  initial,
 }: {
   onNext: (name: string, sport: string, format: TournamentFormat, config: TournamentConfig) => void
+  initial?: StepDetailsInitial
 }) {
-  const [name, setName] = useState('')
-  const [sport, setSport] = useState<'darts' | 'pool'>('darts')
+  const [name, setName] = useState(initial?.name ?? '')
+  const [sport, setSport] = useState<'darts' | 'pool'>(initial?.sport ?? 'darts')
   const [format, setFormat] = useState<TournamentFormat>('single_elimination')
-  const [legs, setLegs] = useState(3)
-  const [startingScore, setStartingScore] = useState<301 | 501>(501)
-  const [doubleOut, setDoubleOut] = useState(true)
-  const [groupSize, setGroupSize] = useState(4)
+  const [legs, setLegs] = useState(initial?.config.legs ?? 3)
+  const [startingScore, setStartingScore] = useState<301 | 501>(initial?.config.startingScore ?? 501)
+  const [doubleOut, setDoubleOut] = useState(initial?.config.doubleOut ?? true)
+  const [groupSize, setGroupSize] = useState(initial?.config.groupSize ?? 4)
   const [error, setError] = useState('')
 
   const handleNext = () => {
@@ -41,6 +52,11 @@ function StepDetails({
 
   return (
     <div className="space-y-6">
+      {initial?.isScheduled && (
+        <div className="px-4 py-3 rounded-lg bg-amber-900/20 border border-amber-700/50 text-amber-300 text-sm">
+          Scheduled tournament loaded — pick a format to continue. Game settings are pre-filled but can be adjusted.
+        </div>
+      )}
       <div>
         <label className="block text-sm font-bold text-gray-200 mb-2">Tournament Name</label>
         <input
@@ -509,18 +525,41 @@ function StepReview({
 
 export default function NewTournament() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const fromId = searchParams.get('from')
+
   const [step, setStep] = useState<Step>(1)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
+  const [stepOneInitial, setStepOneInitial] = useState<StepDetailsInitial | undefined>()
 
   // Collected state across steps
   const [detailName, setDetailName] = useState('')
   const [detailSport, setDetailSport] = useState('darts')
   const [detailFormat, setDetailFormat] = useState<TournamentFormat>('single_elimination')
-  const [detailConfig, setDetailConfig] = useState<TournamentConfig>({ legs: 3, startingScore: 501, doubleOut: true, groupSize: 4 })
+  const [detailConfig, setDetailConfig] = useState<TournamentConfig>({ legs: 3, startingScore: 501, doubleOut: true, groupSize: 4, advanceFromGroup: 2 })
   const [players, setPlayers] = useState<Player[]>([])
 
-  const stepLabels = ['Details', 'Players', 'Review']
+  // Load existing tournament if launched from a scheduled slot
+  useEffect(() => {
+    if (!fromId) return
+    supabase
+      .from('tournaments')
+      .select('id, name, config, sport:sport_id(name)')
+      .eq('id', fromId)
+      .single()
+      .then(({ data }) => {
+        if (!data) return
+        const sportName = ((data as any).sport?.name ?? 'darts') as 'darts' | 'pool'
+        const config = (data as any).config as TournamentConfig
+        setDetailName((data as any).name)
+        setDetailSport(sportName)
+        setDetailConfig(config)
+        setStepOneInitial({ name: (data as any).name, sport: sportName, config, isScheduled: true })
+      })
+  }, [fromId])
+
+  const stepLabels = ['Format', 'Players', 'Review']
 
   const handleStep1 = (name: string, sport: string, format: TournamentFormat, config: TournamentConfig) => {
     setDetailName(name)
@@ -539,12 +578,19 @@ export default function NewTournament() {
     setStarting(true)
     setError('')
     try {
-      const tournament = await createTournament(detailName, detailFormat, detailSport, detailConfig)
-      await generateTournamentStructure(tournament.id, players, detailFormat, detailConfig)
-      await startTournament(tournament.id)
-      navigate(`/bar/tournament/${tournament.id}`)
+      let tournamentId: string
+      if (fromId) {
+        await updateTournamentFormatAndConfig(fromId, detailFormat, detailConfig)
+        tournamentId = fromId
+      } else {
+        const tournament = await createTournament(detailName, detailFormat, detailSport, detailConfig)
+        tournamentId = tournament.id
+      }
+      await generateTournamentStructure(tournamentId, players, detailFormat, detailConfig)
+      await startTournament(tournamentId)
+      navigate(`/bar/tournament/${tournamentId}`)
     } catch (err: unknown) {
-      setError((err as Error).message || 'Failed to create tournament')
+      setError((err as Error).message || 'Failed to start tournament')
       setStarting(false)
     }
   }
@@ -555,8 +601,12 @@ export default function NewTournament() {
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-white mb-1">New Tournament</h1>
-          <p className="text-gray-400 text-sm">Set up a new tournament in {stepLabels.length} steps</p>
+          <h1 className="text-2xl font-bold text-white mb-1">
+            {fromId ? 'Set Up Tonight's Tournament' : 'New Tournament'}
+          </h1>
+          <p className="text-gray-400 text-sm">
+            {fromId ? 'Pick a format, add players, and start.' : `Set up a new tournament in ${stepLabels.length} steps`}
+          </p>
         </div>
 
         {/* Step indicator */}
@@ -581,7 +631,13 @@ export default function NewTournament() {
           <div className="mb-4 p-3 bg-red-900 border border-red-500 rounded-lg text-red-200 text-sm">{error}</div>
         )}
 
-        {step === 1 && <StepDetails onNext={handleStep1} />}
+        {step === 1 && (
+          <StepDetails
+            key={stepOneInitial ? 'loaded' : 'new'}
+            onNext={handleStep1}
+            initial={stepOneInitial}
+          />
+        )}
         {step === 2 && (
           <StepPlayers
             format={detailFormat}

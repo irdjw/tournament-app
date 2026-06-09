@@ -573,6 +573,58 @@ export async function getOrCreateUser(name: string): Promise<Player> {
  * Creates a tournament record.
  * Auto-resolves venueId and sportId from the database.
  */
+/**
+ * Bulk-creates tournament shells for a recurring night. Format is left null —
+ * the venue picks it on the night once they know how many players turned up.
+ * Each record gets a `scheduled_for` date; if multiple dates, the day is
+ * appended to the name automatically.
+ */
+export async function scheduleTournaments(
+  baseName: string,
+  sport: string,
+  config: Partial<TournamentConfig>,
+  dates: string[],
+): Promise<void> {
+  const venueId = await getOrCreateDefaultVenue()
+  const sportId = await getOrCreateSport(sport)
+
+  const fullConfig: TournamentConfig = {
+    legs: config.legs ?? 3,
+    startingScore: config.startingScore ?? 501,
+    doubleOut: config.doubleOut ?? true,
+    groupSize: config.groupSize ?? 4,
+    advanceFromGroup: config.advanceFromGroup ?? 2,
+  }
+
+  const inserts = dates.map(date => ({
+    venue_id: venueId,
+    sport_id: sportId,
+    name: dates.length > 1
+      ? `${baseName} – ${new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : baseName,
+    format: null,
+    status: 'setup',
+    config: fullConfig,
+    scheduled_for: date,
+  }))
+
+  const { error } = await supabase.from('tournaments').insert(inserts)
+  if (error) throw error
+}
+
+/** Updates format and config on an existing scheduled tournament before launch. */
+export async function updateTournamentFormatAndConfig(
+  tournamentId: string,
+  format: TournamentFormat,
+  config: TournamentConfig,
+): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ format, config })
+    .eq('id', tournamentId)
+  if (error) throw error
+}
+
 export async function createTournament(
   name: string,
   format: TournamentFormat,
