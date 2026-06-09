@@ -90,8 +90,8 @@ export default function MatchHistory() {
   const types = ['league', 'tournament', 'friendly']
 
   return (
-    <div className="space-y-5 max-w-6xl">
-      <h1 className="text-2xl font-bold text-white">Match History</h1>
+    <div className="space-y-6 max-w-3xl mx-auto pb-12">
+      <h1 className="text-3xl font-bold text-white">Match History</h1>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">

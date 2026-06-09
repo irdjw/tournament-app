@@ -194,7 +194,7 @@ export default function PlayerDetail() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl mx-auto pb-12">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Link to="/admin/players" className="text-sm text-gray-500 hover:text-gray-300 mb-2 inline-block">
@@ -225,7 +225,7 @@ export default function PlayerDetail() {
             </form>
           ) : (
             <div className="flex items-center gap-3 mt-1">
-              <h1 className="text-2xl font-bold text-white">{player.name}</h1>
+              <h1 className="text-3xl font-bold text-white">{player.name}</h1>
               <button
                 onClick={() => setEditing(true)}
                 className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded bg-gray-800"

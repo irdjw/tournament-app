@@ -56,12 +56,14 @@ function TournamentCard({ t }: { t: Tournament }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <p className="text-white font-semibold truncate">{t.name}</p>
-          <div className="flex items-center gap-1 text-gray-400 text-xs shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-            </svg>
-            {t.participant_count}
-          </div>
+          {t.status !== 'setup' && t.participant_count > 0 && (
+            <div className="flex items-center gap-1 text-gray-400 text-xs shrink-0">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+              {t.participant_count}
+            </div>
+          )}
         </div>
         <p className={`text-xs mt-0.5 ${t.format ? 'text-gray-400' : 'text-amber-500/80'}`}>
           {formatLabel} · {dateStr}

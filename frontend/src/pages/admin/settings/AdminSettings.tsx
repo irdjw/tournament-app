@@ -114,8 +114,8 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
+    <div className="space-y-6 max-w-2xl mx-auto pb-12">
+      <h1 className="text-3xl font-bold text-white">Settings</h1>
 
       {/* Public page card */}
       {venueSlug && (

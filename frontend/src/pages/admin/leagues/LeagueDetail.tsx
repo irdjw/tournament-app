@@ -150,7 +150,7 @@ export default function LeagueDetail() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-4xl mx-auto pb-12">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -172,7 +172,7 @@ export default function LeagueDetail() {
             </form>
           ) : (
             <div className="flex items-center gap-3 mt-1">
-              <h1 className="text-2xl font-bold text-white">{fixture.name}</h1>
+              <h1 className="text-3xl font-bold text-white">{fixture.name}</h1>
               <button onClick={() => setEditing(true)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded bg-gray-800">Edit</button>
             </div>
           )}

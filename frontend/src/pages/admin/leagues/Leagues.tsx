@@ -61,9 +61,9 @@ export default function Leagues() {
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-6 max-w-2xl mx-auto pb-12">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-white">Leagues</h1>
+        <h1 className="text-3xl font-bold text-white">Leagues</h1>
         <Link
           to="/admin/leagues/new"
           className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium transition-colors"
