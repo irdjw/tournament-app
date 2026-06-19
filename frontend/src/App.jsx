@@ -22,6 +22,7 @@ import LeagueNew from './pages/admin/leagues/LeagueNew'
 import LeagueDetail from './pages/admin/leagues/LeagueDetail'
 import Tournaments from './pages/admin/tournaments/Tournaments'
 import TournamentAdmin from './pages/admin/tournaments/TournamentAdmin'
+import ScheduleTournaments from './pages/admin/tournaments/ScheduleTournaments'
 import MatchHistory from './pages/admin/history/MatchHistory'
 import AdminStations from './pages/admin/stations/AdminStations'
 import AdminSettings from './pages/admin/settings/AdminSettings'
@@ -113,6 +114,7 @@ function App() {
             <Route path="/admin/leagues/new" element={<LeagueNew />} />
             <Route path="/admin/leagues/:id" element={<LeagueDetail />} />
             <Route path="/admin/tournaments" element={<Tournaments />} />
+            <Route path="/admin/tournaments/schedule" element={<ScheduleTournaments />} />
             <Route path="/admin/tournaments/:id" element={<TournamentAdmin />} />
             <Route path="/admin/history" element={<MatchHistory />} />
             <Route path="/admin/stations" element={<AdminStations />} />

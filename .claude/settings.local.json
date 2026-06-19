@@ -36,7 +36,11 @@
       "mcp__claude_ai_Supabase__apply_migration",
       "Bash(npm test *)",
       "Bash(npx ts-node *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "mcp__4f115d31-8465-46f6-b4e6-0837bc0b0b4b__list_projects",
+      "mcp__4f115d31-8465-46f6-b4e6-0837bc0b0b4b__execute_sql",
+      "mcp__4f115d31-8465-46f6-b4e6-0837bc0b0b4b__apply_migration",
+      "mcp__4f115d31-8465-46f6-b4e6-0837bc0b0b4b__get_project_url"
     ]
   }
 }

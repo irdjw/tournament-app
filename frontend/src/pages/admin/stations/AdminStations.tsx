@@ -84,10 +84,10 @@ export default function AdminStations() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-6 max-w-2xl mx-auto pb-12">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Stations</h1>
+          <h1 className="text-3xl font-bold text-white">Stations</h1>
           <p className="text-sm text-gray-400 mt-1">
             {stations.filter(s => s.status === 'in_use').length} of {stations.length} in use
             {' '}· Live updates

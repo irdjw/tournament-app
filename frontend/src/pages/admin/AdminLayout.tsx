@@ -32,10 +32,9 @@ function Icon({ name, className = 'w-5 h-5' }: { name: IconName; className?: str
 }
 
 const NAV: { label: string; to: string; end?: boolean; icon: IconName }[] = [
-  { label: 'Dashboard',   to: '/admin',              end: true, icon: 'home' },
+  { label: 'Tournaments', to: '/admin/tournaments',   icon: 'trophy' },
   { label: 'Players',     to: '/admin/players',       icon: 'users' },
   { label: 'Leagues',     to: '/admin/leagues',       icon: 'calendar' },
-  { label: 'Tournaments', to: '/admin/tournaments',   icon: 'trophy' },
   { label: 'History',     to: '/admin/history',       icon: 'clock' },
   { label: 'Stations',    to: '/admin/stations',      icon: 'table' },
   { label: 'Settings',    to: '/admin/settings',      icon: 'cog' },

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
@@ -16,6 +16,8 @@ async function findAvailableSlug(base: string): Promise<string> {
   }
 }
 
+const PENDING_KEY = 'pending_onboarding_venue'
+
 export default function OnboardingVenue() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ venueName: '', yourName: '', email: '', password: '' })
@@ -26,6 +28,19 @@ export default function OnboardingVenue() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  // Resume onboarding if user lands back here after confirming their email
+  useEffect(() => {
+    const pending = sessionStorage.getItem(PENDING_KEY)
+    if (!pending) return
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session?.user) return
+      const saved = JSON.parse(pending)
+      setForm(f => ({ ...f, venueName: saved.venueName, yourName: saved.yourName }))
+      sessionStorage.removeItem(PENDING_KEY)
+      createVenueAndAdmin(data.session.user.id, saved.venueName)
+    })
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -35,7 +50,10 @@ export default function OnboardingVenue() {
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
-        options: { data: { name: form.yourName.trim() } },
+        options: {
+          data: { name: form.yourName.trim() },
+          emailRedirectTo: `${window.location.origin}/onboarding`,
+        },
       })
 
       if (authError) {
@@ -52,24 +70,28 @@ export default function OnboardingVenue() {
       }
 
       if (!authData.session) {
+        sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+          venueName: form.venueName.trim(),
+          yourName: form.yourName.trim(),
+        }))
         setNeedsConfirmation(true)
         setLoading(false)
         return
       }
 
-      await createVenueAndAdmin(user.id)
+      await createVenueAndAdmin(user.id, form.venueName.trim())
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }
   }
 
-  async function createVenueAndAdmin(userId: string) {
-    const slug = await findAvailableSlug(toSlug(form.venueName.trim()))
+  async function createVenueAndAdmin(userId: string, venueName = form.venueName.trim()) {
+    const slug = await findAvailableSlug(toSlug(venueName))
 
     const { data: venueData, error: venueError } = await supabase
       .from('venues')
-      .insert({ name: form.venueName.trim(), slug })
+      .insert({ name: venueName, slug })
       .select('id, slug')
       .single()
 
@@ -92,7 +114,7 @@ export default function OnboardingVenue() {
     sessionStorage.setItem('onboarding', JSON.stringify({
       venueId: venueData.id,
       venueSlug: venueData.slug,
-      venueName: form.venueName.trim(),
+      venueName: venueName,
       userId,
       sports: [],
       sportIds: {},
