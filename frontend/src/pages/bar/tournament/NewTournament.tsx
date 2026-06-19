@@ -68,45 +68,66 @@ function StepDetails({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-bold text-gray-200 mb-2">Sport</label>
-          <div className="flex gap-2">
-            {(['darts', 'pool'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setSport(s)}
-                className={`flex-1 py-3 rounded-lg font-bold capitalize text-sm border-2 transition-colors ${
-                  sport === s
-                    ? 'bg-amber-500 border-amber-400 text-black'
-                    : 'bg-gray-800 border-gray-600 text-gray-300'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-bold text-gray-200 mb-2">Starting Score</label>
-          <div className="flex gap-2">
-            {([301, 501] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setStartingScore(s)}
-                className={`flex-1 py-3 rounded-lg font-bold text-sm border-2 transition-colors ${
-                  startingScore === s
-                    ? 'bg-amber-500 border-amber-400 text-black'
-                    : 'bg-gray-800 border-gray-600 text-gray-300'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-200 mb-2">Sport</label>
+        <div className="flex gap-2">
+          {(['darts', 'pool'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setSport(s)}
+              className={`flex-1 py-3 rounded-lg font-bold capitalize text-sm border-2 transition-colors ${
+                sport === s
+                  ? 'bg-amber-500 border-amber-400 text-black'
+                  : 'bg-gray-800 border-gray-600 text-gray-300'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       </div>
+
+      {sport === 'darts' && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-200 mb-2">Starting Score</label>
+            <div className="flex gap-2">
+              {([301, 501] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStartingScore(s)}
+                  className={`flex-1 py-3 rounded-lg font-bold text-sm border-2 transition-colors ${
+                    startingScore === s
+                      ? 'bg-amber-500 border-amber-400 text-black'
+                      : 'bg-gray-800 border-gray-600 text-gray-300'
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-200 mb-2">Double Out</label>
+            <div className="flex gap-2">
+              {([true, false] as const).map(v => (
+                <button
+                  key={String(v)}
+                  onClick={() => setDoubleOut(v)}
+                  className={`flex-1 py-3 rounded-lg font-bold text-sm border-2 transition-colors ${
+                    doubleOut === v
+                      ? 'bg-amber-500 border-amber-400 text-black'
+                      : 'bg-gray-800 border-gray-600 text-gray-300'
+                  }`}
+                >
+                  {v ? 'Yes' : 'No'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-bold text-gray-200 mb-2">Format</label>
@@ -132,39 +153,20 @@ function StepDetails({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-bold text-gray-200 mb-2">Legs</label>
-          <select
-            value={legs}
-            onChange={e => setLegs(parseInt(e.target.value))}
-            className="w-full bg-gray-800 text-white text-lg border-2 border-gray-600 rounded-lg px-4 py-3 focus:border-amber-400 focus:outline-none"
-          >
-            <option value={1}>1 leg</option>
-            <option value={3}>Best of 3</option>
-            <option value={5}>Best of 5</option>
-            <option value={7}>Best of 7</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-bold text-gray-200 mb-2">Double Out</label>
-          <div className="flex gap-2">
-            {([true, false] as const).map(v => (
-              <button
-                key={String(v)}
-                onClick={() => setDoubleOut(v)}
-                className={`flex-1 py-3 rounded-lg font-bold text-sm border-2 transition-colors ${
-                  doubleOut === v
-                    ? 'bg-amber-500 border-amber-400 text-black'
-                    : 'bg-gray-800 border-gray-600 text-gray-300'
-                }`}
-              >
-                {v ? 'Yes' : 'No'}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div>
+        <label className="block text-sm font-bold text-gray-200 mb-2">
+          {sport === 'pool' ? 'Race to' : 'Legs'}
+        </label>
+        <select
+          value={legs}
+          onChange={e => setLegs(parseInt(e.target.value))}
+          className="w-full bg-gray-800 text-white text-lg border-2 border-gray-600 rounded-lg px-4 py-3 focus:border-amber-400 focus:outline-none"
+        >
+          <option value={1}>{sport === 'pool' ? '1 frame' : '1 leg'}</option>
+          <option value={3}>Best of 3</option>
+          <option value={5}>Best of 5</option>
+          <option value={7}>Best of 7</option>
+        </select>
       </div>
 
       {format === 'group_stage' && (
@@ -221,6 +223,9 @@ function StepPlayers({
   const [loading, setLoading] = useState(false)
   const [groups, setGroups] = useState<GroupPreview[]>([])
   const [groupsGenerated, setGroupsGenerated] = useState(false)
+  const [showBulkAdd, setShowBulkAdd] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   const addPlayer = async () => {
     const name = inputName.trim()
@@ -240,6 +245,28 @@ function StepPlayers({
       setError((err as Error).message || 'Failed to add player')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const addBulkPlayers = async () => {
+    const names = [...new Set(
+      bulkText.split('\n').map(n => n.trim()).filter(Boolean),
+    )]
+    if (names.length === 0) return
+    setBulkLoading(true)
+    setError('')
+    try {
+      const existing = new Set(players.map(p => p.name.toLowerCase()))
+      const toAdd = names.filter(n => !existing.has(n.toLowerCase()))
+      const newPlayers = await Promise.all(toAdd.map(n => getOrCreateUser(n)))
+      setPlayers(prev => [...prev, ...newPlayers])
+      setBulkText('')
+      setShowBulkAdd(false)
+      setGroupsGenerated(false)
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to add players')
+    } finally {
+      setBulkLoading(false)
     }
   }
 
@@ -270,24 +297,52 @@ function StepPlayers({
     <div className="space-y-6">
       {/* Add player */}
       <div>
-        <label className="block text-sm font-bold text-gray-200 mb-2">Add Player</label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={inputName}
-            onChange={e => { setInputName(e.target.value); setError('') }}
-            onKeyDown={e => { if (e.key === 'Enter') addPlayer() }}
-            placeholder="Player name"
-            className="flex-1 bg-gray-800 text-white text-lg border-2 border-gray-600 rounded-lg px-4 py-3 focus:border-amber-400 focus:outline-none"
-          />
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-bold text-gray-200">Add Player</label>
           <button
-            onClick={addPlayer}
-            disabled={loading || !inputName.trim()}
-            className="px-6 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold rounded-lg transition-colors text-sm"
+            onClick={() => setShowBulkAdd(s => !s)}
+            className="text-xs text-amber-400 hover:text-amber-300 font-semibold"
           >
-            {loading ? '…' : 'Add'}
+            {showBulkAdd ? 'Single add' : 'Bulk add ↓'}
           </button>
         </div>
+
+        {showBulkAdd ? (
+          <div className="space-y-2">
+            <textarea
+              rows={6}
+              value={bulkText}
+              onChange={e => { setBulkText(e.target.value); setError('') }}
+              placeholder={'One name per line\nAlice\nBob\nCharlie'}
+              className="w-full bg-gray-800 text-white text-base border-2 border-gray-600 rounded-lg px-4 py-3 focus:border-amber-400 focus:outline-none resize-none"
+            />
+            <button
+              onClick={addBulkPlayers}
+              disabled={bulkLoading || !bulkText.trim()}
+              className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold rounded-lg transition-colors text-sm"
+            >
+              {bulkLoading ? 'Adding…' : 'Add all'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputName}
+              onChange={e => { setInputName(e.target.value); setError('') }}
+              onKeyDown={e => { if (e.key === 'Enter') addPlayer() }}
+              placeholder="Player name"
+              className="flex-1 bg-gray-800 text-white text-lg border-2 border-gray-600 rounded-lg px-4 py-3 focus:border-amber-400 focus:outline-none"
+            />
+            <button
+              onClick={addPlayer}
+              disabled={loading || !inputName.trim()}
+              className="px-6 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-white font-bold rounded-lg transition-colors text-sm"
+            >
+              {loading ? '…' : 'Add'}
+            </button>
+          </div>
+        )}
         {error && <p className="text-red-400 text-sm mt-1">{error}</p>}
       </div>
 
@@ -459,12 +514,16 @@ function StepReview({
           <span className="text-white capitalize">{sport}</span>
           <span className="text-gray-400">Format</span>
           <span className="text-white">{formatLabel[format]}</span>
-          <span className="text-gray-400">Legs</span>
-          <span className="text-white">{config.legs === 1 ? '1 leg' : `Best of ${config.legs}`}</span>
-          <span className="text-gray-400">Starting score</span>
-          <span className="text-white">{config.startingScore}</span>
-          <span className="text-gray-400">Double out</span>
-          <span className="text-white">{config.doubleOut ? 'Yes' : 'No'}</span>
+          <span className="text-gray-400">{sport === 'pool' ? 'Race to' : 'Legs'}</span>
+          <span className="text-white">{config.legs === 1 ? (sport === 'pool' ? '1 frame' : '1 leg') : `Best of ${config.legs}`}</span>
+          {sport === 'darts' && (
+            <>
+              <span className="text-gray-400">Starting score</span>
+              <span className="text-white">{config.startingScore}</span>
+              <span className="text-gray-400">Double out</span>
+              <span className="text-white">{config.doubleOut ? 'Yes' : 'No'}</span>
+            </>
+          )}
           <span className="text-gray-400">Players</span>
           <span className="text-white">{players.length}</span>
         </div>
@@ -607,6 +666,14 @@ export default function NewTournament() {
           <p className="text-gray-400 text-sm">
             {fromId ? 'Pick a format, add players, and start.' : `Set up a new tournament in ${stepLabels.length} steps`}
           </p>
+          {!fromId && step === 1 && (
+            <a
+              href="/admin/tournaments/schedule"
+              className="inline-block mt-2 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              Planning ahead? Schedule recurring tournament nights instead →
+            </a>
+          )}
         </div>
 
         {/* Step indicator */}
