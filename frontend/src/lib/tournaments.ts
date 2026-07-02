@@ -791,11 +791,40 @@ export async function recordTournamentMatchResult(
 }
 
 /**
+ * Winner of the tournament: the winner of the grand final if one exists,
+ * otherwise the winner of the winners-bracket final. Returns null when no
+ * bracket final has completed (e.g. group-only formats).
+ */
+async function findChampion(tournamentId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('tournament_matches')
+    .select('winner_id, group:group_id(group_type)')
+    .eq('tournament_id', tournamentId)
+    .is('next_match_id', null)
+    .eq('status', 'complete')
+
+  const rows = (data ?? []) as {
+    winner_id: string | null
+    group: { group_type: string } | { group_type: string }[] | null
+  }[]
+  const groupType = (r: typeof rows[number]) =>
+    Array.isArray(r.group) ? r.group[0]?.group_type : r.group?.group_type
+
+  const grandFinal = rows.find(r => groupType(r) === 'grand_final')
+  if (grandFinal?.winner_id) return grandFinal.winner_id
+  return rows.find(r => groupType(r) === 'winners')?.winner_id ?? null
+}
+
+/**
  * Core bracket-advancement function.
  * Records winner/loser, fills the winner's next-round slot (A if odd position,
  * B if even), creates an underlying match when both slots of that round are
  * filled, marks losers eliminated (in bracket phase), and detects
  * tournament completion.
+ *
+ * Idempotent: recording a result on an already-complete slot is a no-op, and
+ * the complete-claim is guarded so two concurrent clients (e.g. two open
+ * control pages reacting to the same realtime event) cannot double-advance.
  */
 export async function advanceWinner(
   tournamentMatchId: string,
@@ -803,18 +832,26 @@ export async function advanceWinner(
 ): Promise<{ complete: boolean }> {
   const { data: tmRow, error: fetchErr } = await supabase
     .from('tournament_matches')
-    .select('*')
+    .select('*, group:group_id(id, name, group_type)')
     .eq('id', tournamentMatchId)
     .single()
   if (fetchErr) throw fetchErr
 
   const tm = tmRow as TournamentMatch
-  const loserId = tm.player_a_id === winnerId ? tm.player_b_id : tm.player_a_id
+  if (tm.status === 'complete') return { complete: false }
 
-  await supabase
+  const loserId = tm.player_a_id === winnerId ? tm.player_b_id : tm.player_a_id
+  const isGroupStageMatch = tm.group?.group_type === 'group'
+
+  // Claim the result — only one client can transition the slot to complete.
+  const { data: claimed, error: claimErr } = await supabase
     .from('tournament_matches')
     .update({ winner_id: winnerId, loser_id: loserId, status: 'complete' })
     .eq('id', tournamentMatchId)
+    .neq('status', 'complete')
+    .select('id')
+  if (claimErr) throw claimErr
+  if (!claimed?.length) return { complete: false } // another client got there first
 
   const { data: tRow } = await supabase
     .from('tournaments')
@@ -850,7 +887,10 @@ export async function advanceWinner(
         .update({ match_id: matchId, status: 'in_progress' })
         .eq('id', tm.next_match_id)
     }
-  } else {
+  } else if (!isGroupStageMatch) {
+    // A bracket final completed. The tournament is done when nothing is left
+    // to play. (Group-stage matches never complete the tournament — the
+    // knockout stage still has to be generated.)
     const { count } = await supabase
       .from('tournament_matches')
       .select('*', { count: 'exact', head: true })
@@ -862,28 +902,26 @@ export async function advanceWinner(
         .from('tournaments')
         .update({ status: 'complete' })
         .eq('id', tm.tournament_id)
+
+      // Champion = winner of the grand final / winners-bracket final — NOT
+      // whichever match happened to finish last (the losers final can finish
+      // after the winners final).
+      const championId = (await findChampion(tm.tournament_id)) ?? winnerId
       await supabase
         .from('tournament_participants')
         .update({ status: 'won' })
         .eq('tournament_id', tm.tournament_id)
-        .eq('user_id', winnerId)
+        .eq('user_id', championId)
       complete = true
     }
   }
 
-  if (loserId) {
-    const { data: group } = await supabase
-      .from('tournament_groups')
-      .select('group_type')
-      .eq('id', tm.group_id ?? '')
-      .single()
-    if (group?.group_type !== 'group') {
-      await supabase
-        .from('tournament_participants')
-        .update({ status: 'eliminated' })
-        .eq('tournament_id', tm.tournament_id)
-        .eq('user_id', loserId)
-    }
+  if (loserId && !isGroupStageMatch) {
+    await supabase
+      .from('tournament_participants')
+      .update({ status: 'eliminated' })
+      .eq('tournament_id', tm.tournament_id)
+      .eq('user_id', loserId)
   }
 
   return { complete }

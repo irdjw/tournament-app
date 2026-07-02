@@ -229,6 +229,13 @@ export default function TournamentControl() {
           .order('legs_won', { ascending: false })
 
         if (players && players.length === 2) {
+          if ((players[0].legs_won ?? 0) === (players[1].legs_won ?? 0)) {
+            // Level on legs (e.g. abandoned match) — never guess a winner
+            const a = tm.player_a?.name ?? 'Player A'
+            const b = tm.player_b?.name ?? 'Player B'
+            setError(`${a} vs ${b} ended level — re-open the match and finish the deciding leg.`)
+            continue
+          }
           const winner = players[0].user_id
           const loser = players[1].user_id
           await recordTournamentMatchResult(tm.id, winner, loser)
