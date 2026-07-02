@@ -157,6 +157,18 @@ The app will be available at http://localhost:5175
    - Leg counters update
    - New leg starts automatically
 
+## Security: Row Level Security policies
+
+**Apply `supabase/migrations/20260702000000_rls_write_policies.sql` in the SQL
+Editor (or via `supabase db push`).** Without it, anyone holding the anon key
+can write to every table. The migration keeps all public pages read-only
+working, and restricts writes to authenticated venue staff:
+
+- Every bar/admin user must have a `venue_admins` row — onboarding and
+  `scripts/setup-accounts.ts` both create one.
+- It drops and recreates all policies on the app tables, so review any
+  hand-added policies first.
+
 ## Database Schema Updates
 
 The app now tracks:
