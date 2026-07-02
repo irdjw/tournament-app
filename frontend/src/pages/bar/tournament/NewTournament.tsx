@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import BarNav from '../../../components/BarNav'
 import {
+  buildBracketMatches,
   createTournament,
   generateTournamentStructure,
   startTournament,
@@ -95,10 +96,12 @@ function StepDetails({
       <div>
         <label className="block text-sm font-bold text-gray-200 mb-2">Format</label>
         <div className="flex flex-col gap-2">
+          {/* double_elimination is hidden until loser routing is implemented —
+              recordTournamentMatchResult never populates the losers bracket,
+              so offering it would silently run single elimination. */}
           {([
             ['single_elimination', 'Single Elimination', 'One loss = eliminated'],
-            ['double_elimination', 'Double Elimination', 'Two losses = eliminated'],
-            ['group_stage', 'Group Stage + Brackets', 'Round-robin groups then knockout'],
+            ['group_stage', 'Group Stage + Brackets', 'Round-robin groups, then everyone plays knockout — top finishers in the Winners Bracket, the rest in the Losers Bracket'],
           ] as const).map(([val, label, desc]) => (
             <button
               key={val}
@@ -411,25 +414,16 @@ function StepReview({
     groups.forEach(g => {
       bracketPreview.push(`${g.name} (${g.players.length} players, round-robin)`)
     })
-    bracketPreview.push('→ Top 2 from each group advance to knockout bracket')
-  } else {
-    const n = players.length
-    if (n >= 2) {
-      const roundMatches = Math.ceil(n / 2)
-      for (let m = 0; m < roundMatches; m++) {
-        const a = players[m]
-        const bIdx = n - 1 - m
-        const b = bIdx > m ? players[bIdx] : null
-        if (b) {
-          bracketPreview.push(`R1 M${m + 1}: ${a.name} vs ${b.name}`)
-        } else {
-          bracketPreview.push(`R1 M${m + 1}: ${a.name} (bye)`)
-        }
-      }
-      if (format === 'double_elimination') {
-        bracketPreview.push('→ Losers enter Losers Bracket')
-        bracketPreview.push('→ Grand Final: Winners Bracket champion vs Losers Bracket champion')
-      }
+    bracketPreview.push('→ Top 2 from each group advance to the Winners Bracket, the rest to the Losers Bracket')
+  } else if (players.length >= 2) {
+    // Use the real bracket builder so the preview matches what gets created
+    // (seed placement and byes included)
+    const byId = new Map(players.map(p => [p.id, p]))
+    for (const m of buildBracketMatches(players.map(p => p.id)).filter(m => m.round === 1)) {
+      const a = m.player_a_id ? byId.get(m.player_a_id) : null
+      const b = m.player_b_id ? byId.get(m.player_b_id) : null
+      if (a && b) bracketPreview.push(`R1 M${m.position}: ${a.name} vs ${b.name}`)
+      else if (a) bracketPreview.push(`R1 M${m.position}: ${a.name} (bye)`)
     }
   }
 
