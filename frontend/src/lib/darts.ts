@@ -70,19 +70,30 @@ const CHECKOUT_TABLE: Record<number, string> = {
 // ─── Core functions ───────────────────────────────────────────────────────────
 
 /**
- * Returns true if scoring `score` from `remaining` is a bust.
+ * Returns true if `remaining` can be finished within a single 3-dart visit
+ * ending on a double (standard double-out checkout feasibility).
+ */
+export function canCheckout(remaining: number): boolean {
+  return remaining >= 2 && remaining <= 170 && !IMPOSSIBLE_CHECKOUTS.has(remaining)
+}
+
+/**
+ * Returns true if scoring `score` (a whole-visit total) from `remaining` is a bust.
  *
- * Bust conditions:
+ * Bust conditions (standard 501 rules):
  *  1. Score exceeds remaining (would go negative)
- *  2. Remaining after score is exactly 0, doubleOut is true, and score is
- *     not a valid double value (D1–D20 or Bullseye)
- *  3. Remaining after score is exactly 1 with doubleOut — this is not a bust
- *     on the current visit, but becomes one on the next (handled at throw time)
+ *  2. Double-out: remaining after the visit is exactly 1 (impossible to
+ *     finish from 1 with a double)
+ *  3. Double-out: visit lands exactly on 0 but `remaining` was not a
+ *     checkout-able score (above 170, or one of the impossible values).
+ *     Since only the visit total is entered, any feasible checkout total
+ *     is accepted — we cannot verify the final dart was a double.
  */
 export function isBust(remaining: number, score: number, doubleOut: boolean): boolean {
   const after = remaining - score
   if (after < 0) return true
-  if (after === 0 && doubleOut && !VALID_DOUBLES.has(score)) return true
+  if (doubleOut && after === 1) return true
+  if (after === 0 && doubleOut && !canCheckout(remaining)) return true
   return false
 }
 

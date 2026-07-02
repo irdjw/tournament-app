@@ -1,5 +1,6 @@
 import {
   VALID_DOUBLES,
+  canCheckout,
   isBust,
   applyScore,
   legsToWin,
@@ -37,6 +38,34 @@ describe('VALID_DOUBLES', () => {
   })
 })
 
+// ─── canCheckout ─────────────────────────────────────────────────────────────
+
+describe('canCheckout', () => {
+  it('returns false for 0 and 1', () => {
+    expect(canCheckout(0)).toBe(false)
+    expect(canCheckout(1)).toBe(false)
+  })
+
+  it('returns false above 170', () => {
+    expect(canCheckout(171)).toBe(false)
+    expect(canCheckout(180)).toBe(false)
+  })
+
+  it('returns false for impossible values below 170', () => {
+    for (const n of [169, 168, 166, 165, 163, 162, 159]) {
+      expect(canCheckout(n)).toBe(false)
+    }
+  })
+
+  it('returns true for all other values from 2 to 170', () => {
+    expect(canCheckout(2)).toBe(true)
+    expect(canCheckout(33)).toBe(true)
+    expect(canCheckout(100)).toBe(true)
+    expect(canCheckout(167)).toBe(true)
+    expect(canCheckout(170)).toBe(true)
+  })
+})
+
 // ─── isBust ───────────────────────────────────────────────────────────────────
 
 describe('isBust', () => {
@@ -46,25 +75,28 @@ describe('isBust', () => {
       expect(isBust(10, 11, true)).toBe(true)
     })
 
-    it('is a bust when remaining - score = 0 but score is not a valid double', () => {
-      expect(isBust(33, 33, true)).toBe(true)  // 33 is not a valid double
-      expect(isBust(60, 60, true)).toBe(true)  // 60 is not a valid double
+    it('is a bust when landing on 0 from a non-checkout-able score', () => {
+      expect(isBust(169, 169, true)).toBe(true)  // 169 cannot be checked out
+      expect(isBust(180, 180, true)).toBe(true)  // above max checkout of 170
     })
 
-    it('is NOT a bust when score is a valid double and lands on 0', () => {
-      expect(isBust(32, 32, true)).toBe(false)  // D16 = 32, valid
-      expect(isBust(40, 40, true)).toBe(false)  // D20 = 40, valid
-      expect(isBust(50, 50, true)).toBe(false)  // Bull = 50, valid
-      expect(isBust(2, 2, true)).toBe(false)    // D1 = 2, valid
+    it('is NOT a bust when landing on 0 from a checkout-able score', () => {
+      expect(isBust(32, 32, true)).toBe(false)   // D16
+      expect(isBust(50, 50, true)).toBe(false)   // Bull
+      expect(isBust(33, 33, true)).toBe(false)   // S1 D16 — multi-dart checkout
+      expect(isBust(100, 100, true)).toBe(false) // T20 D20
+      expect(isBust(170, 170, true)).toBe(false) // T20 T20 Bull
     })
 
-    it('is NOT a bust when remaining > 0 after score', () => {
+    it('is NOT a bust when remaining > 1 after score', () => {
       expect(isBust(100, 60, true)).toBe(false)
       expect(isBust(501, 180, true)).toBe(false)
+      expect(isBust(4, 2, true)).toBe(false)   // leaves 2 (D1 next visit)
     })
 
-    it('is NOT a bust when result is 1 (handled next visit)', () => {
-      expect(isBust(3, 2, true)).toBe(false)  // leaves 1 — not a bust this visit
+    it('is a bust when the visit leaves exactly 1', () => {
+      expect(isBust(3, 2, true)).toBe(true)    // cannot finish from 1 on a double
+      expect(isBust(41, 40, true)).toBe(true)
     })
   })
 
@@ -91,12 +123,14 @@ describe('applyScore', () => {
 
   it('leaves remaining unchanged and returns bust=true on a bust', () => {
     expect(applyScore(32, 33, true)).toEqual({ remaining: 32, bust: true })
-    expect(applyScore(33, 33, true)).toEqual({ remaining: 33, bust: true })
+    expect(applyScore(169, 169, true)).toEqual({ remaining: 169, bust: true })
+    expect(applyScore(41, 40, true)).toEqual({ remaining: 41, bust: true }) // leaves 1
   })
 
   it('handles a checkout (remaining → 0) correctly', () => {
     expect(applyScore(32, 32, true)).toEqual({ remaining: 0, bust: false })
     expect(applyScore(50, 50, true)).toEqual({ remaining: 0, bust: false })
+    expect(applyScore(100, 100, true)).toEqual({ remaining: 0, bust: false })
   })
 })
 

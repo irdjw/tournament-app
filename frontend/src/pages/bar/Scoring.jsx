@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { clearStationByMatchId } from '../../lib/stations'
-
-const STARTING_SCORE = 501
+import { getCheckout } from '../../lib/darts'
+import {
+  DEFAULT_SCORING_CONFIG,
+  evaluateVisit,
+  getScoringConfigForMatch,
+  rebuildLegState,
+} from '../../lib/scoring'
 
 export default function Scoring() {
   const { matchId } = useParams()
@@ -12,6 +17,7 @@ export default function Scoring() {
   const returnTo = searchParams.get('returnTo')
 
   const [match, setMatch] = useState(null)
+  const [config, setConfig] = useState(DEFAULT_SCORING_CONFIG)
   const [players, setPlayers] = useState([])
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0)
   const [scores, setScores] = useState({})
@@ -27,16 +33,17 @@ export default function Scoring() {
 
   const loadMatch = async () => {
     try {
-      // Load match
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('id', matchId)
-        .single()
+      // Load match and its scoring rules (tournament config or defaults)
+      const [{ data: matchData, error: matchError }, matchConfig] = await Promise.all([
+        supabase.from('matches').select('*').eq('id', matchId).single(),
+        getScoringConfigForMatch(matchId),
+      ])
 
       if (matchError) throw matchError
       setMatch(matchData)
-      setCurrentLeg(matchData.current_leg || 1)
+      setConfig(matchConfig)
+      const leg = matchData.current_leg || 1
+      setCurrentLeg(leg)
 
       // Load players
       const { data: playersData, error: playersError } = await supabase
@@ -47,36 +54,19 @@ export default function Scoring() {
       if (playersError) throw playersError
       setPlayers(playersData)
 
-      // Initialize scores for current leg
-      const initialScores = {}
-      playersData.forEach(p => {
-        initialScores[p.user_id] = STARTING_SCORE
-      })
-
-      // Load existing events for current leg
+      // Load existing events for current leg and rebuild state
       const { data: eventsData } = await supabase
         .from('match_events')
         .select('*')
         .eq('match_id', matchId)
-        .eq('leg_number', matchData.current_leg || 1)
+        .eq('leg_number', leg)
         .order('created_at', { ascending: true })
 
-      if (eventsData && eventsData.length > 0) {
-        // Rebuild state from events for current leg
-        const history = []
-        const currentScores = { ...initialScores }
-
-        eventsData.forEach(event => {
-          history.push(event)
-          currentScores[event.user_id] = event.remaining_score
-        })
-
-        setVisitHistory(history)
-        setScores(currentScores)
-        setCurrentPlayerIndex(eventsData.length % playersData.length)
-      } else {
-        setScores(initialScores)
-      }
+      const events = eventsData ?? []
+      const state = rebuildLegState(events, playersData.map(p => p.user_id), leg, matchConfig)
+      setVisitHistory(events)
+      setScores(state.scores)
+      setCurrentPlayerIndex(state.currentPlayerIndex)
 
       setLoading(false)
     } catch (err) {
@@ -110,22 +100,12 @@ export default function Scoring() {
 
       if (error) throw error
 
-      // Update local state
+      // Rebuild state without the undone event
       const newHistory = visitHistory.slice(0, -1)
+      const state = rebuildLegState(newHistory, players.map(p => p.user_id), currentLeg, config)
       setVisitHistory(newHistory)
-
-      // Recalculate scores
-      const newScores = {}
-      players.forEach(p => {
-        newScores[p.user_id] = STARTING_SCORE
-      })
-
-      newHistory.forEach(event => {
-        newScores[event.user_id] = event.remaining_score
-      })
-
-      setScores(newScores)
-      setCurrentPlayerIndex((currentPlayerIndex - 1 + players.length) % players.length)
+      setScores(state.scores)
+      setCurrentPlayerIndex(state.currentPlayerIndex)
       setInputValue('')
     } catch (err) {
       console.error('Error undoing:', err)
@@ -136,22 +116,22 @@ export default function Scoring() {
   const handleSubmit = async () => {
     const scoreValue = parseInt(inputValue)
 
-    if (isNaN(scoreValue) || scoreValue < 0 || scoreValue > 180) {
-      setError('Invalid score (0-180)')
+    const currentPlayer = players[currentPlayerIndex]
+    const currentScore = scores[currentPlayer.user_id]
+    const outcome = evaluateVisit(currentScore, isNaN(scoreValue) ? -1 : scoreValue, config)
+
+    if (outcome.kind === 'invalid') {
+      setError(outcome.reason)
       return
     }
 
-    const currentPlayer = players[currentPlayerIndex]
-    const currentScore = scores[currentPlayer.user_id]
-    const newScore = currentScore - scoreValue
-
-    // Bust validation
-    if (newScore < 0 || newScore === 1) {
+    // Bust — double-out aware (leaving 1, or an un-checkoutable finish)
+    if (outcome.kind === 'bust') {
       setError('BUST! Score resets.')
       setInputValue('')
 
-      // Log bust event
-      const { error: bustError } = await supabase
+      // Log bust event (kept in local history so undo and turn order stay in sync)
+      const { data: bustEvent, error: bustError } = await supabase
         .from('match_events')
         .insert({
           match_id: matchId,
@@ -163,8 +143,11 @@ export default function Scoring() {
           leg_number: currentLeg,
           metadata: { bust: true }
         })
+        .select()
+        .single()
 
       if (bustError) console.error('Error logging bust:', bustError)
+      else setVisitHistory([...visitHistory, bustEvent])
 
       // Move to next player
       setCurrentPlayerIndex((currentPlayerIndex + 1) % players.length)
@@ -173,7 +156,7 @@ export default function Scoring() {
     }
 
     // Check for leg win
-    if (newScore === 0) {
+    if (outcome.kind === 'leg_win') {
       try {
         // Log winning visit
         await supabase
@@ -241,7 +224,7 @@ export default function Scoring() {
           event_type: 'visit',
           visit_number: visitHistory.filter(e => e.user_id === currentPlayer.user_id).length + 1,
           score_value: scoreValue,
-          remaining_score: newScore,
+          remaining_score: outcome.remaining,
           leg_number: currentLeg
         })
         .select()
@@ -252,7 +235,7 @@ export default function Scoring() {
       // Update local state
       setScores({
         ...scores,
-        [currentPlayer.user_id]: newScore
+        [currentPlayer.user_id]: outcome.remaining
       })
       setVisitHistory([...visitHistory, eventData])
       setCurrentPlayerIndex((currentPlayerIndex + 1) % players.length)
@@ -275,13 +258,14 @@ export default function Scoring() {
   const currentPlayer = players[currentPlayerIndex]
   const legsToWin = match.legs_to_win || 1
   const totalLegs = (legsToWin * 2) - 1
+  const checkoutHint = config.doubleOut ? getCheckout(scores[currentPlayer.user_id]) : null
 
   return (
     <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Darts Scoring</h1>
         <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#666' }}>
-          Best of {totalLegs} • Leg {currentLeg}
+          {config.startingScore} {config.doubleOut ? 'DO' : 'SO'} • Best of {totalLegs} • Leg {currentLeg}
         </div>
       </div>
 
@@ -319,6 +303,11 @@ export default function Scoring() {
         <div style={{ fontSize: '2.5rem', fontWeight: 'bold', minHeight: '60px' }}>
           {inputValue || '—'}
         </div>
+        {checkoutHint && (
+          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2e7d32' }}>
+            Checkout: {checkoutHint}
+          </div>
+        )}
       </div>
 
       {error && (

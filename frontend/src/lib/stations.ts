@@ -130,9 +130,10 @@ export async function getScoresForMatch(
   matchId: string,
   currentLeg: number,
   players: StationPlayer[],
+  startingScore = 501,
 ): Promise<Record<string, number>> {
   const scores: Record<string, number> = {}
-  players.forEach(p => { scores[p.user_id] = 501 })
+  players.forEach(p => { scores[p.user_id] = startingScore })
 
   const { data } = await supabase
     .from('match_events')
@@ -145,7 +146,7 @@ export async function getScoresForMatch(
   for (const event of data ?? []) {
     if (!seen.has(event.user_id)) {
       seen.add(event.user_id)
-      scores[event.user_id] = event.remaining_score ?? 501
+      scores[event.user_id] = event.remaining_score ?? startingScore
     }
   }
   return scores
