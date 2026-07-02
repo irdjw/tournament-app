@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import BarNav from '../../components/BarNav'
-import { getAllStations, createStation } from '../../lib/stations'
+import { getAllStations, getStationsForVenue, createStation } from '../../lib/stations'
 import type { Station } from '../../lib/stations'
+import { useAuth } from '../../hooks/useAuth'
 
 interface Venue {
   id: string
@@ -159,6 +160,8 @@ function loadDefaultConfig() {
 }
 
 export default function Settings() {
+  const { venueAdmin } = useAuth()
+  const venueId = venueAdmin?.venue_id
   const [venue, setVenue] = useState<Venue | null>(null)
   const [sports, setSports] = useState<Sport[]>([])
   const [stations, setStations] = useState<Station[]>([])
@@ -171,13 +174,16 @@ export default function Settings() {
 
   useEffect(() => {
     loadAll()
-  }, [])
+  }, [venueId])
 
   const loadAll = async () => {
+    // Load THIS staff member's venue — never "first venue in the table"
     const [{ data: vData }, { data: sData }, stData] = await Promise.all([
-      supabase.from('venues').select('id, name').limit(1).single(),
+      venueId
+        ? supabase.from('venues').select('id, name').eq('id', venueId).single()
+        : Promise.resolve({ data: null }),
       supabase.from('sports').select('id, name').order('name'),
-      getAllStations(),
+      venueId ? getStationsForVenue(venueId) : getAllStations(),
     ])
     setVenue(vData as Venue ?? null)
     setSports((sData as Sport[]) ?? [])

@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import {
   Station, StationPlayer, UnassignedMatch,
-  getAllStations, assignMatchToStation, clearStation,
+  getAllStations, getStationsForVenue, assignMatchToStation, clearStation,
   createStation, getUnassignedMatches, getScoresForMatch,
 } from '../../lib/stations'
+import { useAuth } from '../../hooks/useAuth'
 import BarNav from '../../components/BarNav'
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -54,10 +55,11 @@ function AssignModal({ stationId, onClose, onAssigned }: { stationId: string; on
   const [selected, setSelected] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const { venueAdmin } = useAuth()
 
   useEffect(() => {
-    getUnassignedMatches().then(setMatches)
-  }, [])
+    getUnassignedMatches(venueAdmin?.venue_id).then(setMatches)
+  }, [venueAdmin?.venue_id])
 
   const label = (m: UnassignedMatch) =>
     m.match_players.map(p => p.users?.name).filter(Boolean).join(' vs ') || m.id.slice(0, 8)
@@ -119,18 +121,17 @@ function AddStationForm({ onAdded, onClose }: { onAdded: () => void; onClose: ()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const { venueAdmin } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) { setError('Name required'); return }
     setBusy(true)
     try {
-      // Use default venue + sport
-      const { data: venue } = await supabase.from('venues').select('id').limit(1).single()
       const { data: sport } = await supabase.from('sports').select('id').eq('name', 'darts').single()
-      if (!venue) throw new Error('No venue found — create one first')
+      if (!venueAdmin?.venue_id) throw new Error('No venue linked to your account')
       if (!sport) throw new Error('Darts sport not found')
-      await createStation(venue.id, sport.id, name.trim())
+      await createStation(venueAdmin.venue_id, sport.id, name.trim())
       onAdded()
       onClose()
     } catch (e: unknown) {
@@ -238,6 +239,8 @@ function StationCard({ station, onRefresh }: { station: Station; onRefresh: () =
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Stations() {
+  const { venueAdmin } = useAuth()
+  const venueId = venueAdmin?.venue_id
   const [stations, setStations] = useState<Station[]>([])
   const [loading, setLoading] = useState(true)
   const [addingStation, setAddingStation] = useState(false)
@@ -250,11 +253,11 @@ export default function Stations() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'stations' }, load)
       .subscribe()
     return () => { channelRef.current?.unsubscribe() }
-  }, [])
+  }, [venueId])
 
   const load = async () => {
     try {
-      const data = await getAllStations()
+      const data = venueId ? await getStationsForVenue(venueId) : await getAllStations()
       setStations(data)
     } finally {
       setLoading(false)

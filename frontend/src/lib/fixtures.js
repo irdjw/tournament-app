@@ -1,19 +1,7 @@
 import { supabase } from './supabase'
+import { getOrCreatePlayer } from './players'
 
-// ─── Venue / Sport helpers ───────────────────────────────────────────────────
-
-async function getOrCreateDefaultVenue() {
-  let { data } = await supabase.from('venues').select('id').limit(1).single()
-  if (data) return data.id
-
-  const { data: created, error } = await supabase
-    .from('venues')
-    .insert({ name: 'Default Venue' })
-    .select('id')
-    .single()
-  if (error) throw error
-  return created.id
-}
+// ─── Sport helper ────────────────────────────────────────────────────────────
 
 async function getOrCreateDartsSport() {
   let { data } = await supabase.from('sports').select('id').eq('name', 'darts').single()
@@ -28,21 +16,12 @@ async function getOrCreateDartsSport() {
   return created.id
 }
 
-export async function getOrCreateUser(name) {
-  const email = `${name.toLowerCase().replace(/\s+/g, '')}@temp.com`
-  const { data, error } = await supabase
-    .from('users')
-    .upsert({ name, email }, { onConflict: 'email' })
-    .select()
-    .single()
-  if (error) throw error
-  return data
-}
+export { getOrCreatePlayer as getOrCreateUser } from './players'
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-export async function createFixture(name, dayOfWeek, startTime) {
-  const venueId = await getOrCreateDefaultVenue()
+export async function createFixture(name, dayOfWeek, startTime, venueId) {
+  if (!venueId) throw new Error('No venue linked to your account — cannot create a fixture')
   const sportId = await getOrCreateDartsSport()
 
   const { data, error } = await supabase
@@ -126,12 +105,21 @@ export async function getPairingsForRound(roundId) {
 }
 
 export async function createPairing(fixtureRoundId, homePlayerName, awayPlayerName, station, legsToWin) {
-  const [homePlayer, awayPlayer, venueId, sportId] = await Promise.all([
-    getOrCreateUser(homePlayerName),
-    getOrCreateUser(awayPlayerName),
-    getOrCreateDefaultVenue(),
-    getOrCreateDartsSport(),
+  // Venue and sport come from the round's parent fixture, not a global default
+  const [homePlayer, awayPlayer, { data: round }] = await Promise.all([
+    getOrCreatePlayer(homePlayerName),
+    getOrCreatePlayer(awayPlayerName),
+    supabase
+      .from('fixture_rounds')
+      .select('fixture:fixture_id(venue_id, sport_id)')
+      .eq('id', fixtureRoundId)
+      .single(),
   ])
+
+  const fixture = Array.isArray(round?.fixture) ? round.fixture[0] : round?.fixture
+  const venueId = fixture?.venue_id
+  const sportId = fixture?.sport_id ?? (await getOrCreateDartsSport())
+  if (!venueId) throw new Error('Fixture has no venue — cannot create a match')
 
   const { data: match, error: matchError } = await supabase
     .from('matches')

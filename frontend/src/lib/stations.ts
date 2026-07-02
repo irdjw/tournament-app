@@ -102,7 +102,7 @@ export async function createStation(venueId: string, sportId: string, name: stri
   return data as unknown as Station
 }
 
-export async function getUnassignedMatches(): Promise<UnassignedMatch[]> {
+export async function getUnassignedMatches(venueId?: string): Promise<UnassignedMatch[]> {
   const { data: occupied } = await supabase
     .from('stations')
     .select('current_match_id')
@@ -114,6 +114,11 @@ export async function getUnassignedMatches(): Promise<UnassignedMatch[]> {
     .from('matches')
     .select('id, status, match_players(users(name))')
     .in('status', ['pending', 'in_progress'])
+
+  // Scope to the venue; legacy casual matches have no venue_id, keep them visible
+  if (venueId) {
+    query = query.or(`venue_id.eq.${venueId},venue_id.is.null`)
+  }
 
   if (occupiedIds.length > 0) {
     query = query.not('id', 'in', `(${occupiedIds.join(',')})`)

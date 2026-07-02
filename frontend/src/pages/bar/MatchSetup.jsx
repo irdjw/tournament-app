@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { assignMatchToStation } from '../../lib/stations'
+import { getOrCreatePlayer } from '../../lib/players'
+import { useAuth } from '../../hooks/useAuth'
 import BarNav from '../../components/BarNav'
 
 export default function MatchSetup() {
   const navigate = useNavigate()
+  const { venueAdmin } = useAuth()
   const [loading, setLoading] = useState(false)
   const [player1Name, setPlayer1Name] = useState('')
   const [player2Name, setPlayer2Name] = useState('')
@@ -15,13 +18,15 @@ export default function MatchSetup() {
   const [selectedStation, setSelectedStation] = useState('')
 
   useEffect(() => {
-    supabase
+    let query = supabase
       .from('stations')
       .select('id, name, sport:sport_id(name)')
       .eq('status', 'available')
       .order('name')
-      .then(({ data }) => setStations(data || []))
-  }, [])
+    // Only this venue's stations once the admin record has loaded
+    if (venueAdmin?.venue_id) query = query.eq('venue_id', venueAdmin.venue_id)
+    query.then(({ data }) => setStations(data || []))
+  }, [venueAdmin?.venue_id])
 
   const handleCreateMatch = async (e) => {
     e.preventDefault()
@@ -35,22 +40,11 @@ export default function MatchSetup() {
     setLoading(true)
 
     try {
-      // Create or get players
-      const { data: player1Data, error: p1Error } = await supabase
-        .from('users')
-        .upsert({ name: player1Name, email: `${player1Name.toLowerCase().replace(/\s+/g, '')}@temp.com` }, { onConflict: 'email' })
-        .select()
-        .single()
-
-      if (p1Error) throw p1Error
-
-      const { data: player2Data, error: p2Error } = await supabase
-        .from('users')
-        .upsert({ name: player2Name, email: `${player2Name.toLowerCase().replace(/\s+/g, '')}@temp.com` }, { onConflict: 'email' })
-        .select()
-        .single()
-
-      if (p2Error) throw p2Error
+      // Create or get players (shared helper — same identity rules everywhere)
+      const [player1Data, player2Data] = await Promise.all([
+        getOrCreatePlayer(player1Name),
+        getOrCreatePlayer(player2Name),
+      ])
 
       // Get darts sport (or create it)
       let { data: sport } = await supabase
@@ -70,10 +64,11 @@ export default function MatchSetup() {
         sport = newSport
       }
 
-      // Create match
+      // Create match, stamped with the staff member's venue
       const { data: match, error: matchError } = await supabase
         .from('matches')
         .insert({
+          venue_id: venueAdmin?.venue_id ?? null,
           sport_id: sport.id,
           match_type: 'casual',
           status: 'in_progress',

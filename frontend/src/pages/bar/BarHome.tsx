@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import BarNav from '../../components/BarNav'
-import { getAllStations } from '../../lib/stations'
+import { getAllStations, getStationsForVenue } from '../../lib/stations'
 import { useAuth } from '../../hooks/useAuth'
 
 interface ActiveTournament {
@@ -30,29 +30,40 @@ export default function BarHome() {
   const [stationInUse, setStationInUse] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  const venueId = venueAdmin?.venue_id
+
   useEffect(() => {
     loadAll()
-  }, [])
+  }, [venueId])
 
   const loadAll = async () => {
     try {
+      // Scope to this staff member's venue once known; unscoped fallback
+      // covers platform admins browsing without a venue link
+      let tournamentQuery = supabase
+        .from('tournaments')
+        .select('id, name, status')
+        .in('status', ['active', 'group', 'brackets'])
+        .order('created_at', { ascending: false })
+      let fixtureQuery = supabase
+        .from('fixtures')
+        .select('id, name, day_of_week')
+        .eq('active', true)
+        .order('name')
+      if (venueId) {
+        tournamentQuery = tournamentQuery.eq('venue_id', venueId)
+        fixtureQuery = fixtureQuery.eq('venue_id', venueId)
+      }
+
       const [{ data: tData }, { data: fData }, { data: roundData }, stations] = await Promise.all([
-        supabase
-          .from('tournaments')
-          .select('id, name, status')
-          .in('status', ['active', 'group', 'brackets'])
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('fixtures')
-          .select('id, name, day_of_week')
-          .eq('active', true)
-          .order('name'),
+        tournamentQuery,
+        fixtureQuery,
         supabase
           .from('fixture_rounds')
           .select('id, round_number, fixture_id')
           .eq('status', 'in_progress')
           .order('round_number', { ascending: false }),
-        getAllStations(),
+        venueId ? getStationsForVenue(venueId) : getAllStations(),
       ])
 
       setTournaments((tData as ActiveTournament[]) ?? [])

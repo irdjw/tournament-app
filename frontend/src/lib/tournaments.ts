@@ -203,15 +203,6 @@ export function getActiveMatches(matches: TournamentMatch[]): TournamentMatch[] 
 
 // ─── DB helpers (private) ─────────────────────────────────────────────────────
 
-async function getOrCreateDefaultVenue(): Promise<string> {
-  let { data } = await supabase.from('venues').select('id').limit(1).single()
-  if (data) return data.id
-  const { data: created, error } = await supabase
-    .from('venues').insert({ name: 'Default Venue' }).select('id').single()
-  if (error) throw error
-  return created.id
-}
-
 async function getOrCreateSport(sport: string): Promise<string> {
   let { data } = await supabase.from('sports').select('id').eq('name', sport).single()
   if (data) return data.id
@@ -221,14 +212,11 @@ async function getOrCreateSport(sport: string): Promise<string> {
   return created.id
 }
 
-async function getDefaultVenueAndSport(): Promise<{ venueId: string; sportId: string }> {
-  const [{ data: venue }, { data: sport }] = await Promise.all([
-    supabase.from('venues').select('id').limit(1).single(),
-    supabase.from('sports').select('id').eq('name', 'darts').single(),
-  ])
-  if (!venue) throw new Error('No venue found — create one first')
-  if (!sport) throw new Error('Darts sport not found')
-  return { venueId: venue.id, sportId: sport.id }
+/** Venue and sport come from the tournament row itself — never guessed. */
+function requireVenueAndSport(t: { venue_id: string | null; sport_id: string | null } | null): { venueId: string; sportId: string } {
+  if (!t?.venue_id) throw new Error('Tournament has no venue — cannot create matches')
+  if (!t?.sport_id) throw new Error('Tournament has no sport — cannot create matches')
+  return { venueId: t.venue_id, sportId: t.sport_id }
 }
 
 async function createUnderlyingMatch(
@@ -415,28 +403,20 @@ async function computeGroupStandings(groupId: string): Promise<GroupStanding[]> 
 
 // ─── Exported API ─────────────────────────────────────────────────────────────
 
-export async function getOrCreateUser(name: string): Promise<Player> {
-  const email = `${name.toLowerCase().replace(/\s+/g, '')}@temp.com`
-  const { data, error } = await supabase
-    .from('users')
-    .upsert({ name, email }, { onConflict: 'email' })
-    .select('id, name')
-    .single()
-  if (error) throw error
-  return data as Player
-}
+export { getOrCreatePlayer as getOrCreateUser } from './players'
 
 /**
- * Creates a tournament record.
- * Auto-resolves venueId and sportId from the database.
+ * Creates a tournament record for the given venue.
+ * The venue comes from the signed-in staff member's venue_admins row.
  */
 export async function createTournament(
   name: string,
   format: TournamentFormat,
   sport: string,
   config: Partial<TournamentConfig>,
+  venueId: string,
 ): Promise<Tournament> {
-  const venueId = await getOrCreateDefaultVenue()
+  if (!venueId) throw new Error('No venue linked to your account — cannot create a tournament')
   const sportId = await getOrCreateSport(sport)
 
   const fullConfig: TournamentConfig = {
@@ -502,8 +482,7 @@ export async function generateTournamentStructure(
     .eq('id', tournamentId)
     .single()
 
-  const venueId = t?.venue_id ?? await getOrCreateDefaultVenue()
-  const sportId = t?.sport_id ?? (await getOrCreateSport('darts'))
+  const { venueId, sportId } = requireVenueAndSport(t)
 
   // 1. Insert participants
   if (players.length > 0) {
@@ -579,7 +558,7 @@ export async function generateGroupStage(tournamentId: string): Promise<void> {
 
   const config = tournament.config as TournamentConfig
   const numGroups = Math.ceil(participants.length / config.groupSize)
-  const { venueId, sportId } = await getDefaultVenueAndSport()
+  const { venueId, sportId } = requireVenueAndSport(tournament)
 
   const { data: groups, error: gErr } = await supabase
     .from('tournament_groups')
@@ -684,7 +663,7 @@ export async function generateKnockoutFromGroups(
 
   const config = tournament.config as TournamentConfig
   const advance = advanceFrom ?? config.advanceFromGroup ?? 2
-  const { venueId, sportId } = await getDefaultVenueAndSport()
+  const { venueId, sportId } = requireVenueAndSport(tournament)
 
   const groupStandings = await Promise.all(groups.map(g => computeGroupStandings(g.id)))
 
@@ -880,7 +859,7 @@ export async function advanceWinner(
     const updatedB = isSlotA ? next.player_b_id : winnerId
 
     if (updatedA && updatedB && !next.match_id) {
-      const { venueId, sportId } = await getDefaultVenueAndSport()
+      const { venueId, sportId } = requireVenueAndSport(tRow)
       const matchId = await createUnderlyingMatch(updatedA, updatedB, config, venueId, sportId)
       await supabase
         .from('tournament_matches')

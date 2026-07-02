@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import BarNav from '../../../components/BarNav'
+import { useAuth } from '../../../hooks/useAuth'
 import {
   buildBracketMatches,
   createTournament,
@@ -503,6 +504,7 @@ function StepReview({
 
 export default function NewTournament() {
   const navigate = useNavigate()
+  const { venueAdmin, isLoading: authLoading } = useAuth()
   const [step, setStep] = useState<Step>(1)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
@@ -530,10 +532,14 @@ export default function NewTournament() {
   }
 
   const handleStart = async () => {
+    if (!venueAdmin?.venue_id) {
+      setError('No venue is linked to your account — finish onboarding first')
+      return
+    }
     setStarting(true)
     setError('')
     try {
-      const tournament = await createTournament(detailName, detailFormat, detailSport, detailConfig)
+      const tournament = await createTournament(detailName, detailFormat, detailSport, detailConfig, venueAdmin.venue_id)
       await generateTournamentStructure(tournament.id, players, detailFormat, detailConfig)
       await startTournament(tournament.id)
       navigate(`/bar/tournament/${tournament.id}`)
@@ -570,6 +576,12 @@ export default function NewTournament() {
             )
           })}
         </div>
+
+        {!authLoading && !venueAdmin && (
+          <div className="mb-4 p-3 bg-amber-900/40 border border-amber-600 rounded-lg text-amber-200 text-sm">
+            No venue is linked to your account — complete onboarding before starting a tournament.
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 bg-red-900 border border-red-500 rounded-lg text-red-200 text-sm">{error}</div>

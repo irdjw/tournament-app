@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createFixture } from '../../../lib/fixtures'
+import { useAuth } from '../../../hooks/useAuth'
 import BarNav from '../../../components/BarNav'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function LeagueSetup() {
   const navigate = useNavigate()
+  const { venueAdmin } = useAuth()
   const [name, setName] = useState('')
   const [dayOfWeek, setDayOfWeek] = useState(3) // Wednesday
   const [startTime, setStartTime] = useState('19:30')
@@ -19,7 +21,7 @@ export default function LeagueSetup() {
     if (!name.trim()) { setError('Fixture name is required'); return }
     setLoading(true)
     try {
-      const fixture = await createFixture(name.trim(), dayOfWeek, startTime)
+      const fixture = await createFixture(name.trim(), dayOfWeek, startTime, venueAdmin?.venue_id)
       navigate(`/bar/league/${fixture.id}`)
     } catch (err) {
       setError(err.message || 'Failed to create fixture')
