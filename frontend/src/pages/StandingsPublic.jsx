@@ -13,32 +13,32 @@ export default function StandingsPublic() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const timerRef = useRef(null)
 
-  useEffect(() => {
-    loadAll()
-    timerRef.current = setInterval(loadStandings, REFRESH_INTERVAL)
-    return () => clearInterval(timerRef.current)
-  }, [fixtureId])
-
-  const loadAll = async () => {
+  async function loadAll() {
     try {
       const [fix, table] = await Promise.all([getFixture(fixtureId), getStandings(fixtureId)])
       setFixture(fix)
       setStandings(table)
       setLastUpdated(new Date())
-    } catch (_) {
+    } catch {
       // silently fail on refresh
     } finally {
       setLoading(false)
     }
   }
 
-  const loadStandings = async () => {
+  async function loadStandings() {
     try {
       const table = await getStandings(fixtureId)
       setStandings(table)
       setLastUpdated(new Date())
-    } catch (_) {}
+    } catch { /* silently fail on refresh */ }
   }
+
+  useEffect(() => {
+    loadAll()
+    timerRef.current = setInterval(loadStandings, REFRESH_INTERVAL)
+    return () => clearInterval(timerRef.current)
+  }, [fixtureId])
 
   if (loading) {
     return (

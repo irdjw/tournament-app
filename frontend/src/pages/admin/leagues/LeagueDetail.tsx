@@ -66,8 +66,10 @@ export default function LeagueDetail() {
     ])
 
     if (fixtureRes.data) {
-      setFixture(fixtureRes.data as Fixture)
-      setEditName((fixtureRes.data as any).name)
+      // Supabase types embedded joins as arrays; runtime shape is an object
+      const fixtureRow = fixtureRes.data as unknown as Fixture
+      setFixture(fixtureRow)
+      setEditName(fixtureRow.name)
     }
     setStandings(standingsData as StandingRow[])
     setRounds((roundsRes.data ?? []) as Round[])

@@ -68,6 +68,7 @@ export default function OnboardingStations() {
   }
 
   async function handleNext() {
+    if (!ob) return
     setLoading(true)
     for (const station of pending) {
       const sportId = ob.sportIds[station.sport]

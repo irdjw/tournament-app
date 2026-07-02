@@ -31,7 +31,7 @@ export default function Scoring() {
     loadMatch()
   }, [matchId])
 
-  const loadMatch = async () => {
+  async function loadMatch() {
     try {
       // Load match and its scoring rules (tournament config or defaults)
       const [{ data: matchData, error: matchError }, matchConfig] = await Promise.all([

@@ -108,7 +108,7 @@ function BracketPanel({
   group: TournamentGroup | undefined
   matches: TournamentMatch[]
   accentColor: string
-  scrollRef: React.RefObject<HTMLDivElement>
+  scrollRef: React.RefObject<HTMLDivElement | null>
 }) {
   const labelMap: Record<string, string> = {
     winners: 'Winners Bracket',
@@ -188,7 +188,7 @@ function GrandFinal({ match }: { match: TournamentMatch | undefined }) {
 
 // ─── Auto-scroll hook ─────────────────────────────────────────────────────────
 
-function useAutoScroll(ref: React.RefObject<HTMLDivElement>, deps: unknown[]) {
+function useAutoScroll(ref: React.RefObject<HTMLDivElement | null>, deps: unknown[]) {
   useEffect(() => {
     const el = ref.current
     if (!el) return

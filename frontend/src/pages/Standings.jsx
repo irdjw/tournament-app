@@ -5,11 +5,7 @@ export default function Standings() {
   const [standings, setStandings] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadStandings()
-  }, [])
-
-  const loadStandings = async () => {
+  async function loadStandings() {
     try {
       // Get all completed matches and calculate standings
       const { data: matches, error: matchError } = await supabase
@@ -102,6 +98,10 @@ export default function Standings() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    loadStandings()
+  }, [])
 
   if (loading) {
     return (

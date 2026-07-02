@@ -26,13 +26,7 @@ export default function RoundDetail() {
 
   const channelRef = useRef(null)
 
-  useEffect(() => {
-    loadAll()
-    subscribeToUpdates()
-    return () => { channelRef.current?.unsubscribe() }
-  }, [roundId])
-
-  const loadAll = async () => {
+  async function loadAll() {
     try {
       const [roundData, pairingsData] = await Promise.all([
         getFixtureRound(roundId),
@@ -47,7 +41,7 @@ export default function RoundDetail() {
     }
   }
 
-  const subscribeToUpdates = () => {
+  function subscribeToUpdates() {
     channelRef.current = supabase
       .channel(`round-${roundId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' }, () => {
@@ -58,6 +52,12 @@ export default function RoundDetail() {
       })
       .subscribe()
   }
+
+  useEffect(() => {
+    loadAll()
+    subscribeToUpdates()
+    return () => { channelRef.current?.unsubscribe() }
+  }, [roundId])
 
   const handleAddPairing = async (e) => {
     e.preventDefault()

@@ -14,7 +14,7 @@ export interface TournamentConfig {
   /** Players per group (group_stage format). */
   groupSize: number
   /** How many places advance from each group to the parallel brackets. Default 2. */
-  advanceFromGroup: number
+  advanceFromGroup?: number
 }
 
 export interface Player {

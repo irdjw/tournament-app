@@ -14,11 +14,7 @@ export default function FixtureDetail() {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [fixtureId])
-
-  const load = async () => {
+  async function load() {
     try {
       const [fix, table] = await Promise.all([getFixture(fixtureId), getStandings(fixtureId)])
       setFixture(fix)
@@ -29,6 +25,10 @@ export default function FixtureDetail() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    load()
+  }, [fixtureId])
 
   const handleStartRound = async () => {
     setStarting(true)

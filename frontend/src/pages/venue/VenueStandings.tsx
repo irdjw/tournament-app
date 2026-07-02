@@ -51,7 +51,8 @@ export default function VenueStandings() {
     setLoading(true)
     try {
       const data = await getStandings(id)
-      setStandings(data as StandingRow[])
+      // Supabase types embedded joins as arrays; runtime shape is an object
+      setStandings(data as unknown as StandingRow[])
       setLastUpdated(new Date())
     } catch (_) {}
     finally { setLoading(false) }

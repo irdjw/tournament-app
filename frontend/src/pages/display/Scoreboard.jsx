@@ -16,7 +16,7 @@ export default function Scoreboard() {
     subscribeToUpdates()
   }, [])
 
-  const loadCurrentMatch = async () => {
+  async function loadCurrentMatch() {
     try {
       // Get the most recent in_progress match
       const { data: matchData, error: matchError } = await supabase
@@ -76,7 +76,7 @@ export default function Scoreboard() {
     }
   }
 
-  const loadUpcomingMatches = async () => {
+  async function loadUpcomingMatches() {
     try {
       const { data: pendingMatches, error } = await supabase
         .from('matches')
@@ -97,7 +97,7 @@ export default function Scoreboard() {
     }
   }
 
-  const subscribeToUpdates = () => {
+  function subscribeToUpdates() {
     // Subscribe to match_events table changes
     const channel = supabase
       .channel('scoreboard-updates')
